@@ -1,0 +1,6 @@
+{
+  "name": "Litenote",
+  "description": "Professional real-time social network and messenger with live feeds, direct & group chat, media posts, interactive polls, AI assistant, and real-time traffic analytics.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

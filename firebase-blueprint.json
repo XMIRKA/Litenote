@@ -1,0 +1,228 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with customizable cyber handle, status, and theme preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "handle": { "type": "string", "maxLength": 50, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "avatarUrl": { "type": "string" },
+        "bannerUrl": { "type": "string" },
+        "bio": { "type": "string", "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["online", "idle", "busy", "offline"] },
+        "customStatus": { "type": "string", "maxLength": 200 },
+        "accentColor": { "type": "string", "enum": ["emerald", "cyan", "amber", "violet", "lime"] },
+        "language": { "type": "string", "enum": ["en", "ru"] },
+        "location": { "type": "string", "maxLength": 100 },
+        "website": { "type": "string", "maxLength": 200 },
+        "github": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "badges": { "type": "array" },
+        "privacy": { "type": "object" },
+        "stats": { "type": "object" }
+      },
+      "required": ["uid", "email", "displayName", "handle"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Transmission note posted on the feed",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorHandle": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "content": { "type": "string", "maxLength": 5000 },
+        "summary": { "type": "string" },
+        "codeSnippet": { "type": "object" },
+        "mediaUrl": { "type": "string" },
+        "mediaType": { "type": "string" },
+        "poll": { "type": "object" },
+        "tags": { "type": "array" },
+        "reactions": { "type": "object" },
+        "commentsCount": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "authorId", "content", "createdAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Discussion response on a post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "postId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorHandle": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "content": { "type": "string", "maxLength": 2000 },
+        "parentId": { "type": "string" },
+        "reactions": { "type": "object" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "postId", "authorId", "content", "createdAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "Encrypted chat channel or direct messenger stream",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["direct", "group", "channel", "ai_bot"] },
+        "name": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "participants": { "type": "array" },
+        "participantDetails": { "type": "object" },
+        "lastMessage": { "type": "object" },
+        "updatedAt": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "participants", "updatedAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Message item in a conversation (text, voice, circular video, file)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderHandle": { "type": "string" },
+        "senderAvatar": { "type": "string" },
+        "type": { "type": "string", "enum": ["text", "voice", "video", "file", "image", "system"] },
+        "text": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "mediaDuration": { "type": "number" },
+        "waveform": { "type": "array" },
+        "fileName": { "type": "string" },
+        "fileSize": { "type": "string" },
+        "reactions": { "type": "object" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "senderId", "createdAt"]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Symmetrical alliance between two operators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "requesterId": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined", "blocked"] },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "requesterId", "recipientId", "status", "createdAt"]
+    },
+    "Follow": {
+      "title": "Follow",
+      "description": "Asymmetrical follow relationship",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "followerId": { "type": "string" },
+        "followingId": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "followerId", "followingId", "createdAt"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "Realtime notification event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "fromUserId": { "type": "string" },
+        "fromUserName": { "type": "string" },
+        "fromUserAvatar": { "type": "string" },
+        "type": { "type": "string" },
+        "message": { "type": "string" },
+        "postId": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "fromUserId", "message", "createdAt"]
+    },
+    "CallSession": {
+      "title": "CallSession",
+      "description": "Realtime WebRTC Audio and Video call session with signaling metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "callerId": { "type": "string" },
+        "callerName": { "type": "string" },
+        "callerHandle": { "type": "string" },
+        "callerAvatar": { "type": "string" },
+        "calleeId": { "type": "string" },
+        "calleeName": { "type": "string" },
+        "calleeHandle": { "type": "string" },
+        "calleeAvatar": { "type": "string" },
+        "callType": { "type": "string", "enum": ["voice", "video"] },
+        "status": { "type": "string", "enum": ["ringing", "connected", "declined", "missed", "ended"] },
+        "startedAt": { "type": "number" },
+        "connectedAt": { "type": "number" },
+        "endedAt": { "type": "number" },
+        "durationSeconds": { "type": "number" },
+        "offer": { "type": "object" },
+        "answer": { "type": "object" },
+        "callerCandidates": { "type": "array" },
+        "calleeCandidates": { "type": "array" }
+      },
+      "required": ["id", "callerId", "calleeId", "callType", "status", "startedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles and custom identities"
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "#/entities/Post" },
+      "description": "Social feed transmissions"
+    },
+    "/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Comments and replies on posts"
+    },
+    "/conversations/{convId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Messenger conversations"
+    },
+    "/conversations/{convId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Messages within a conversation"
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Top-level messages collection"
+    },
+    "/calls/{callId}": {
+      "schema": { "$ref": "#/entities/CallSession" },
+      "description": "Realtime WebRTC Audio and Video call signaling"
+    },
+    "/friendships/{friendshipId}": {
+      "schema": { "$ref": "#/entities/Friendship" },
+      "description": "Friend requests and alliances"
+    },
+    "/follows/{followId}": {
+      "schema": { "$ref": "#/entities/Follow" },
+      "description": "User following graph"
+    },
+    "/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/NotificationItem" },
+      "description": "In-app notifications"
+    }
+  }
+}

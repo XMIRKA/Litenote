@@ -1,0 +1,89 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated();
+      allow delete: if isOwner(userId);
+    }
+
+    // Posts collection
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid);
+    }
+
+    // Comments collection
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid);
+    }
+
+    // Conversations
+    match /conversations/{convId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
+
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated();
+
+        match /chunks/{chunkId} {
+          allow read, write: if isAuthenticated();
+        }
+      }
+    }
+
+    // Direct Messages
+    match /messages/{messageId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Realtime Calls & WebRTC Signaling
+    match /calls/{callId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Friendships & Social relations
+    match /friendships/{friendshipId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /follows/{followId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /bookmarks/{bookmarkId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /notifications/{notificationId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Traffic Analytics & Realtime Presence Tracking
+    match /analytics/{docId} {
+      allow read, write: if true;
+    }
+
+    match /sessions/{sessionId} {
+      allow read, write: if true;
+    }
+
+    match /activity_logs/{logId} {
+      allow read, write: if true;
+    }
+  }
+}
