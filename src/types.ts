@@ -34,6 +34,7 @@ export interface UserProfile {
   email: string;
   displayName: string;
   handle: string; // e.g. "neo_matrix"
+  passwordHash?: string;
   avatarUrl: string;
   bannerUrl: string;
   bio: string;

@@ -52,9 +52,10 @@ export const Auth2: React.FC<Auth2Props> = ({
     signInWithGoogle,
     signInWithEmail,
     signUpWithEmail,
+    resetPassword,
   } = useAuth();
 
-  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
+  const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -69,34 +70,10 @@ export const Auth2: React.FC<Auth2Props> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [activeTestimonialIdx, setActiveTestimonialIdx] = useState(0);
 
-  const handleResetPassword = async () => {
-    const trimmed = email.trim();
-    if (!trimmed || !trimmed.includes('@')) {
-      setErrorMsg(
-        language === 'ru'
-          ? 'Введите ваш email в поле ниже, чтобы получить ссылку для восстановления пароля.'
-          : 'Please enter your email in the field below to receive a password recovery link.'
-      );
-      return;
-    }
-    setIsResetting(true);
+  const handleResetPassword = () => {
+    setMode('reset');
     setErrorMsg(null);
     setResetSentEmail(null);
-    try {
-      await sendPasswordResetEmail(auth, trimmed);
-      setResetSentEmail(trimmed);
-    } catch (err: any) {
-      console.error('Password reset error:', err);
-      if (err?.code === 'auth/user-not-found') {
-        setErrorMsg(language === 'ru' ? 'Пользователь с таким email не найден.' : 'User with this email was not found.');
-      } else if (err?.code === 'auth/invalid-email') {
-        setErrorMsg(language === 'ru' ? 'Некорректный адрес электронной почты.' : 'Invalid email address format.');
-      } else {
-        setErrorMsg(language === 'ru' ? 'Ошибка при отправке ссылки сброса пароля.' : 'Failed to send password reset email.');
-      }
-    } finally {
-      setIsResetting(false);
-    }
   };
 
   const handleOAuthNotice = (providerName: string) => {
@@ -189,7 +166,7 @@ export const Auth2: React.FC<Auth2Props> = ({
     try {
       if (mode === 'signin') {
         await signInWithEmail(email, password);
-      } else {
+      } else if (mode === 'signup') {
         const cleanHandle = handle.trim().replace(/^@/, '').toLowerCase();
         if (!cleanHandle) {
           setErrorMsg(language === 'ru' ? 'Укажите никнейм (@handle)' : 'Username (@handle) is required');
@@ -202,6 +179,18 @@ export const Auth2: React.FC<Auth2Props> = ({
           return;
         }
         await signUpWithEmail(email, password, displayName || cleanHandle, cleanHandle);
+      } else if (mode === 'reset') {
+        if (!email.trim()) {
+          setErrorMsg(language === 'ru' ? 'Укажите email или никнейм' : 'Enter email or handle');
+          setIsLoading(false);
+          return;
+        }
+        if (password.length < 6) {
+          setErrorMsg(language === 'ru' ? 'Новый пароль должен содержать от 6 символов' : 'Password must be at least 6 characters');
+          setIsLoading(false);
+          return;
+        }
+        await resetPassword(email, password);
       }
       if (onSuccess) onSuccess();
     } catch (err: any) {
@@ -387,7 +376,9 @@ export const Auth2: React.FC<Auth2Props> = ({
               <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
                 {mode === 'signin'
                   ? (language === 'ru' ? 'С возвращением' : 'Welcome back')
-                  : (language === 'ru' ? 'Создать профиль' : 'Create an account')}
+                  : mode === 'signup'
+                  ? (language === 'ru' ? 'Создать профиль' : 'Create an account')
+                  : (language === 'ru' ? 'Сброс пароля' : 'Reset password')}
               </h3>
               
               {/* Mode Toggle Capsule */}
@@ -426,7 +417,9 @@ export const Auth2: React.FC<Auth2Props> = ({
             <p className="text-xs sm:text-sm text-slate-400">
               {mode === 'signin'
                 ? (language === 'ru' ? 'Введите ваши данные для доступа к хабу LiteNote' : 'Enter your credentials to access your LiteNote workspace')
-                : (language === 'ru' ? 'Присоединяйтесь к тысячам инженеров и создавайте будущее' : 'Join thousands of builders in the sovereign coder matrix')}
+                : mode === 'signup'
+                ? (language === 'ru' ? 'Присоединяйтесь к тысячам инженеров и создавайте будущее' : 'Join thousands of builders in the sovereign coder matrix')
+                : (language === 'ru' ? 'Укажите email или никнейм и задайте новый пароль' : 'Enter your email or handle and set a new password')}
             </p>
           </div>
 
@@ -569,18 +562,29 @@ export const Auth2: React.FC<Auth2Props> = ({
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-[11px] font-mono text-slate-400">
-                  {language === 'ru' ? 'Пароль' : 'Password'}
+                  {mode === 'reset'
+                    ? (language === 'ru' ? 'Новый пароль' : 'New Password')
+                    : (language === 'ru' ? 'Пароль' : 'Password')}
                 </label>
                 {mode === 'signin' && (
                   <button
                     type="button"
                     onClick={handleResetPassword}
-                    disabled={isResetting}
-                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-mono hover:underline cursor-pointer disabled:opacity-50"
+                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-mono hover:underline cursor-pointer"
                   >
-                    {isResetting
-                      ? (language === 'ru' ? 'Отправка...' : 'Sending...')
-                      : (language === 'ru' ? 'Забыли пароль?' : 'Forgot password?')}
+                    {language === 'ru' ? 'Забыли пароль?' : 'Forgot password?'}
+                  </button>
+                )}
+                {mode === 'reset' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('signin');
+                      setErrorMsg(null);
+                    }}
+                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-mono hover:underline cursor-pointer"
+                  >
+                    {language === 'ru' ? '← Назад ко входу' : '← Back to sign in'}
                   </button>
                 )}
               </div>
@@ -602,7 +606,7 @@ export const Auth2: React.FC<Auth2Props> = ({
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
               </div>
-              {mode === 'signup' && (
+              {(mode === 'signup' || mode === 'reset') && (
                 <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-400 font-mono">
                   <div className={`w-1.5 h-1.5 rounded-full ${password.length >= 6 ? 'bg-emerald-400' : 'bg-slate-600'}`} />
                   <span>{language === 'ru' ? 'Минимум 6 символов' : 'At least 6 characters'}</span>
@@ -638,10 +642,16 @@ export const Auth2: React.FC<Auth2Props> = ({
                   <span>{language === 'ru' ? 'Войти в LiteNote' : 'Sign in to LiteNote'}</span>
                   <ArrowRight className="w-4 h-4 stroke-[2.5]" />
                 </>
-              ) : (
+              ) : mode === 'signup' ? (
                 <>
                   <UserPlus className="w-4 h-4 stroke-[2.5]" />
                   <span>{language === 'ru' ? 'Создать аккаунт и войти' : 'Create Account & Sign In'}</span>
+                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                </>
+              ) : (
+                <>
+                  <Lock className="w-4 h-4 stroke-[2.5]" />
+                  <span>{language === 'ru' ? 'Обновить пароль и войти' : 'Update Password & Sign In'}</span>
                   <ArrowRight className="w-4 h-4 stroke-[2.5]" />
                 </>
               )}

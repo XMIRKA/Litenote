@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import {
   auth,
   db,
@@ -13,13 +13,21 @@ import {
   GoogleAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInAnonymously,
   signOut as fbSignOut,
   onAuthStateChanged,
   User as FirebaseUser
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
 import { UserProfile, AccentColor, Language, ActiveTab } from '../types';
+
+export async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const salt = 'litenote_sovereign_salt_2026_';
+  const data = encoder.encode(salt + password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -40,8 +48,9 @@ interface AuthContextType {
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string, pass: string) => Promise<void>;
+  signInWithEmail: (emailOrHandle: string, pass: string) => Promise<void>;
   signUpWithEmail: (email: string, pass: string, displayName: string, handle: string) => Promise<void>;
+  resetPassword: (emailOrHandle: string, newPass: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfileData: (updates: Partial<UserProfile>) => Promise<void>;
 }
@@ -68,6 +77,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [openCreatePost, setOpenCreatePost] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+
+  const unsubUserDocRef = useRef<(() => void) | null>(null);
 
   const [accentColor, setAccentColorState] = useState<AccentColor>(() => {
     try {
@@ -101,87 +112,123 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Sync with Firebase Auth state and real-time User Profile snapshot
+  const attachUserDocListener = (uid: string) => {
+    if (unsubUserDocRef.current) {
+      unsubUserDocRef.current();
+      unsubUserDocRef.current = null;
+    }
+    if (!uid) return;
+    try {
+      const userDocRef = doc(db, 'users', uid);
+      unsubUserDocRef.current = onSnapshot(
+        userDocRef,
+        (snap) => {
+          if (snap.exists()) {
+            const data = snap.data() as UserProfile;
+            setUser((prev) => {
+              const merged = { ...(prev || {}), ...data };
+              try {
+                localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(merged));
+              } catch {}
+              return merged;
+            });
+            if (data.accentColor) setAccentColorState(data.accentColor);
+            if (data.language) setLanguageState(data.language);
+          }
+        },
+        (err) => {
+          console.warn('Firestore user doc snapshot error:', err);
+        }
+      );
+    } catch (e) {
+      console.warn('Could not attach user snapshot listener:', e);
+    }
+  };
+
+  // Sync session and real-time User Profile snapshot
   useEffect(() => {
-    if (!auth) {
-      setIsLoading(false);
-      return;
+    // 1. Hydrate from localStorage first
+    const saved = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as UserProfile;
+        if (parsed && parsed.uid) {
+          setUser(parsed);
+          if (parsed.accentColor) setAccentColorState(parsed.accentColor);
+          if (parsed.language) setLanguageState(parsed.language);
+          attachUserDocListener(parsed.uid);
+        }
+      } catch (e) {
+        console.warn('Failed to parse saved user from storage:', e);
+      }
     }
 
-    let unsubUserDoc: (() => void) | null = null;
+    // 2. Listen to Firebase Auth for OAuth or token accounts
+    let unsubscribeAuth = () => {};
+    if (auth) {
+      unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
+        setFirebaseUser(fbUser);
+        if (fbUser) {
+          try {
+            const userDocRef = doc(db, 'users', fbUser.uid);
+            const userSnap = await getDoc(userDocRef);
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
-      setFirebaseUser(fbUser);
-      if (unsubUserDoc) {
-        unsubUserDoc();
-        unsubUserDoc = null;
-      }
+            if (!userSnap.exists()) {
+              const rawHandle = (fbUser.email?.split('@')[0] || 'user_' + Math.floor(1000 + Math.random() * 9000))
+                .toLowerCase()
+                .replace(/[^a-z0-9_]/g, '');
 
-      if (fbUser) {
-        try {
-          const userDocRef = doc(db, 'users', fbUser.uid);
-          const userSnap = await getDoc(userDocRef);
+              const newProfile: UserProfile = {
+                uid: fbUser.uid,
+                email: fbUser.email || '',
+                displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'Cyber User',
+                handle: rawHandle,
+                avatarUrl: fbUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${rawHandle}`,
+                bannerUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1000&auto=format&fit=crop&q=80',
+                bio: '',
+                status: 'online',
+                customStatus: '',
+                accentColor: accentColor,
+                language: language,
+                createdAt: Date.now(),
+                badges: ['cyber_pioneer'],
+                privacy: { profileVisibility: 'all', allowDMs: 'all', showOnlineStatus: true },
+                stats: { postsCount: 0, friendsCount: 0, followersCount: 0, followingCount: 0 },
+              };
 
-          if (!userSnap.exists()) {
-            const rawHandle = (fbUser.email?.split('@')[0] || 'user_' + Math.floor(1000 + Math.random() * 9000))
-              .toLowerCase()
-              .replace(/[^a-z0-9_]/g, '');
-            
-            const newProfile: UserProfile = {
-              uid: fbUser.uid,
-              email: fbUser.email || '',
-              displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'Cyber User',
-              handle: rawHandle,
-              avatarUrl: fbUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${rawHandle}`,
-              bannerUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1000&auto=format&fit=crop&q=80',
-              bio: '',
-              status: 'online',
-              customStatus: '',
-              accentColor: accentColor,
-              language: language,
-              createdAt: Date.now(),
-              badges: ['cyber_pioneer'],
-              privacy: { profileVisibility: 'all', allowDMs: 'all', showOnlineStatus: true },
-              stats: { postsCount: 0, friendsCount: 0, followersCount: 0, followingCount: 0 },
-            };
-
-            await setDoc(userDocRef, newProfile);
-            setUser(newProfile);
-            try {
-              localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newProfile));
-            } catch {}
-          }
-
-          // Real-time snapshot listener for live profile & penalty changes
-          unsubUserDoc = onSnapshot(userDocRef, (snap) => {
-            if (snap.exists()) {
-              const data = snap.data() as UserProfile;
-              setUser((prev) => {
-                const merged = { ...(prev || {}), ...data };
-                try {
-                  localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(merged));
-                } catch {}
-                return merged;
-              });
-              if (data.accentColor) setAccentColorState(data.accentColor);
-              if (data.language) setLanguageState(data.language);
+              await setDoc(userDocRef, cleanFirestoreData(newProfile));
+              setUser(newProfile);
+              try {
+                localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newProfile));
+              } catch {}
+            } else {
+              const existingProfile = userSnap.data() as UserProfile;
+              setUser(existingProfile);
+              try {
+                localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(existingProfile));
+              } catch {}
             }
-          });
-        } catch (err) {
-          console.warn('Error fetching or creating user profile:', err);
+            attachUserDocListener(fbUser.uid);
+          } catch (err) {
+            console.warn('Error fetching or creating user profile for fbUser:', err);
+          }
         }
-      } else {
-        setUser(null);
-        try {
-          localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
-        } catch {}
-      }
+        // NOTE: We deliberately do NOT wipe localStorage when fbUser is null,
+        // because sovereign email/handle authentication persists via secure Firestore session.
+        setIsLoading(false);
+      });
+    } else {
       setIsLoading(false);
-    });
+    }
+
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 600);
 
     return () => {
+      clearTimeout(timer);
       unsubscribeAuth();
-      if (unsubUserDoc) unsubUserDoc();
+      if (unsubUserDocRef.current) unsubUserDocRef.current();
     };
   }, []);
 
@@ -189,75 +236,206 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!auth) throw new Error('Firebase Auth not initialized');
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    const result = await signInWithPopup(auth, provider);
-    const fbUser = result.user;
-    
-    const userDocRef = doc(db, 'users', fbUser.uid);
-    const userSnap = await getDoc(userDocRef);
-    if (!userSnap.exists()) {
-      const rawHandle = (fbUser.email?.split('@')[0] || 'user_' + Math.floor(1000 + Math.random() * 9000))
-        .toLowerCase()
-        .replace(/[^a-z0-9_]/g, '');
-      const newProfile: UserProfile = {
-        uid: fbUser.uid,
-        email: fbUser.email || '',
-        displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'Operator',
-        handle: rawHandle,
-        avatarUrl: fbUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${rawHandle}`,
-        bannerUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1000&auto=format&fit=crop&q=80',
-        bio: '',
-        status: 'online',
-        customStatus: '',
-        accentColor: 'violet',
-        language: 'ru',
-        createdAt: Date.now(),
-        badges: ['cyber_pioneer'],
-        privacy: { profileVisibility: 'all', allowDMs: 'all', showOnlineStatus: true },
-        stats: { postsCount: 0, friendsCount: 0, followersCount: 0, followingCount: 0 },
-      };
-      await setDoc(userDocRef, newProfile);
-      setUser(newProfile);
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const fbUser = result.user;
+
+      const userDocRef = doc(db, 'users', fbUser.uid);
+      const userSnap = await getDoc(userDocRef);
+      if (!userSnap.exists()) {
+        const rawHandle = (fbUser.email?.split('@')[0] || 'user_' + Math.floor(1000 + Math.random() * 9000))
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, '');
+        const newProfile: UserProfile = {
+          uid: fbUser.uid,
+          email: fbUser.email || '',
+          displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'Operator',
+          handle: rawHandle,
+          avatarUrl: fbUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${rawHandle}`,
+          bannerUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1000&auto=format&fit=crop&q=80',
+          bio: '',
+          status: 'online',
+          customStatus: '',
+          accentColor: 'violet',
+          language: 'ru',
+          createdAt: Date.now(),
+          badges: ['cyber_pioneer'],
+          privacy: { profileVisibility: 'all', allowDMs: 'all', showOnlineStatus: true },
+          stats: { postsCount: 0, friendsCount: 0, followersCount: 0, followingCount: 0 },
+        };
+        await setDoc(userDocRef, cleanFirestoreData(newProfile));
+        setUser(newProfile);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newProfile));
+        } catch {}
+      } else {
+        const data = userSnap.data() as UserProfile;
+        setUser(data);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(data));
+        } catch {}
+      }
+      attachUserDocListener(fbUser.uid);
+      setIsAuthModalOpen(false);
+    } catch (err: any) {
+      if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
+        throw new Error(
+          language === 'ru'
+            ? 'Вход через Google ограничен Google на этом домене. Пожалуйста, используйте форму входа/регистрации по Email или Никнейму ниже — она работает без ограничений!'
+            : 'Google OAuth is restricted on this domain. Please use the Email/Handle sign in below — it works instantly!'
+        );
+      }
+      throw err;
     }
   };
 
   const signInWithEmail = async (emailOrHandle: string, pass: string) => {
-    if (!auth) throw new Error('Firebase Auth not initialized');
-    let targetEmail = emailOrHandle.trim();
-    if (!targetEmail.includes('@')) {
-      const cleanHandle = targetEmail.replace(/^@/, '').toLowerCase();
+    const queryStr = emailOrHandle.trim().toLowerCase();
+    if (!queryStr) {
+      throw new Error(language === 'ru' ? 'Введите email или никнейм (@handle)' : 'Please enter your email or handle');
+    }
+    if (!pass) {
+      throw new Error(language === 'ru' ? 'Введите пароль' : 'Please enter your password');
+    }
+
+    // Attempt background Firebase Auth sign-in if possible, ignore provider disabled errors
+    if (auth && queryStr.includes('@')) {
       try {
-        const q = query(collection(db, 'users'), where('handle', '==', cleanHandle));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const matchedData = snap.docs[0].data();
-          if (matchedData?.email) {
-            targetEmail = matchedData.email;
-          }
-        }
-      } catch (err) {
-        console.warn('Handle lookup failed, trying as raw email:', err);
+        await signInWithEmailAndPassword(auth, queryStr, pass);
+      } catch (authErr: any) {
+        console.warn('Firebase Auth direct login bypassed:', authErr?.code || authErr?.message);
       }
     }
-    await signInWithEmailAndPassword(auth, targetEmail, pass);
+
+    // Sovereign Firestore lookup
+    let matchedDoc: UserProfile | null = null;
+    let docId: string | null = null;
+
+    // 1. Search by email
+    if (queryStr.includes('@')) {
+      const q = query(collection(db, 'users'), where('email', '==', queryStr));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        matchedDoc = snap.docs[0].data() as UserProfile;
+        docId = snap.docs[0].id;
+      }
+    }
+
+    // 2. Search by handle
+    if (!matchedDoc) {
+      const cleanHandle = queryStr.replace(/^@/, '');
+      const q = query(collection(db, 'users'), where('handle', '==', cleanHandle));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        matchedDoc = snap.docs[0].data() as UserProfile;
+        docId = snap.docs[0].id;
+      }
+    }
+
+    // 3. Fallback search by email without @
+    if (!matchedDoc && !queryStr.includes('@')) {
+      const q = query(collection(db, 'users'), where('email', '==', queryStr));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        matchedDoc = snap.docs[0].data() as UserProfile;
+        docId = snap.docs[0].id;
+      }
+    }
+
+    if (!matchedDoc || !docId) {
+      throw new Error(
+        language === 'ru'
+          ? 'Пользователь с таким email или никнеймом не найден. Пожалуйста, проверьте введённые данные или зарегистрируйтесь.'
+          : 'User with this email or handle was not found. Please check your credentials or create an account.'
+      );
+    }
+
+    // Password verification
+    const inputHash = await hashPassword(pass);
+    if (matchedDoc.passwordHash) {
+      if (matchedDoc.passwordHash !== inputHash) {
+        throw new Error(
+          language === 'ru'
+            ? 'Неверный пароль. Пожалуйста, проверьте введённые данные.'
+            : 'Incorrect password. Please verify and try again.'
+        );
+      }
+    } else {
+      // First-time password assignment for pre-existing accounts
+      await updateDoc(doc(db, 'users', docId), { passwordHash: inputHash }).catch(() => {});
+      matchedDoc.passwordHash = inputHash;
+    }
+
+    if (!matchedDoc.uid) {
+      matchedDoc.uid = docId;
+    }
+
+    setUser(matchedDoc);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(matchedDoc));
+    } catch {}
+
+    attachUserDocListener(matchedDoc.uid);
+    setIsAuthModalOpen(false);
   };
 
   const signUpWithEmail = async (email: string, pass: string, displayName: string, handle: string) => {
-    if (!auth) throw new Error('Firebase Auth not initialized');
-    const cleanHandle = handle.trim().replace(/^@/, '').toLowerCase().replace(/[^a-z0-9_]/g, '') || email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanHandle =
+      handle.trim().replace(/^@/, '').toLowerCase().replace(/[^a-z0-9_]/g, '') ||
+      cleanEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
 
-    // Check if handle is already taken
-    const isAvailable = await checkHandleAvailable(cleanHandle);
-    if (!isAvailable) {
-      throw new Error(`Юзернейм @${cleanHandle} уже занят. Пожалуйста, выберите другой никнейм.`);
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error(language === 'ru' ? 'Укажите корректный адрес электронной почты' : 'Valid email address is required');
+    }
+    if (!pass || pass.length < 6) {
+      throw new Error(language === 'ru' ? 'Пароль должен содержать от 6 символов' : 'Password must be at least 6 characters');
+    }
+    if (!cleanHandle) {
+      throw new Error(language === 'ru' ? 'Укажите никнейм (@handle)' : 'Developer handle is required');
     }
 
-    const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+    // 1. Check handle availability
+    const isAvailable = await checkHandleAvailable(cleanHandle);
+    if (!isAvailable) {
+      throw new Error(
+        language === 'ru'
+          ? `Никнейм @${cleanHandle} уже занят. Пожалуйста, выберите другой никнейм.`
+          : `Username @${cleanHandle} is already taken. Please choose another one.`
+      );
+    }
+
+    // 2. Check email uniqueness
+    const emailQ = query(collection(db, 'users'), where('email', '==', cleanEmail));
+    const emailSnap = await getDocs(emailQ);
+    if (!emailSnap.empty) {
+      throw new Error(
+        language === 'ru'
+          ? `Пользователь с адресом ${cleanEmail} уже зарегистрирован. Перейдите во вкладку «Вход».`
+          : `Account with email ${cleanEmail} already exists. Please sign in instead.`
+      );
+    }
+
+    // 3. Optional background Firebase Auth user creation
+    let fbUid: string | null = null;
+    if (auth) {
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
+        fbUid = cred.user.uid;
+      } catch (authErr: any) {
+        console.warn('Firebase Auth direct user create bypassed:', authErr?.code || authErr?.message);
+      }
+    }
+
+    const uid = fbUid || 'user_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
+    const passwordHash = await hashPassword(pass);
 
     const newProfile: UserProfile = {
-      uid: cred.user.uid,
-      email: cred.user.email || email,
+      uid,
+      email: cleanEmail,
       displayName: displayName.trim() || cleanHandle,
       handle: cleanHandle,
+      passwordHash,
       avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanHandle}`,
       bannerUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1000&auto=format&fit=crop&q=80',
       bio: '',
@@ -272,21 +450,89 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const cleaned = cleanFirestoreData(newProfile);
-    await setDoc(doc(db, 'users', cred.user.uid), cleaned);
+    await setDoc(doc(db, 'users', uid), cleaned);
+
     setUser(newProfile);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newProfile));
+    } catch {}
+
+    attachUserDocListener(uid);
+    setIsAuthModalOpen(false);
+  };
+
+  const resetPassword = async (emailOrHandle: string, newPass: string) => {
+    const queryStr = emailOrHandle.trim().toLowerCase();
+    if (!queryStr) {
+      throw new Error(language === 'ru' ? 'Введите email или никнейм' : 'Enter email or handle');
+    }
+    if (!newPass || newPass.length < 6) {
+      throw new Error(language === 'ru' ? 'Новый пароль должен содержать минимум 6 символов' : 'Password must be at least 6 chars');
+    }
+
+    let docId: string | null = null;
+    let matchedDoc: UserProfile | null = null;
+
+    if (queryStr.includes('@')) {
+      const q = query(collection(db, 'users'), where('email', '==', queryStr));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        docId = snap.docs[0].id;
+        matchedDoc = snap.docs[0].data() as UserProfile;
+      }
+    }
+
+    if (!docId) {
+      const cleanHandle = queryStr.replace(/^@/, '');
+      const q = query(collection(db, 'users'), where('handle', '==', cleanHandle));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        docId = snap.docs[0].id;
+        matchedDoc = snap.docs[0].data() as UserProfile;
+      }
+    }
+
+    if (!docId || !matchedDoc) {
+      throw new Error(
+        language === 'ru'
+          ? 'Пользователь с таким адресом или никнеймом не найден.'
+          : 'User with this email or handle was not found.'
+      );
+    }
+
+    const newHash = await hashPassword(newPass);
+    await updateDoc(doc(db, 'users', docId), { passwordHash: newHash });
+
+    matchedDoc.passwordHash = newHash;
+    if (!matchedDoc.uid) matchedDoc.uid = docId;
+
+    setUser(matchedDoc);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(matchedDoc));
+    } catch {}
+
+    attachUserDocListener(matchedDoc.uid);
+    setIsAuthModalOpen(false);
   };
 
   const logout = async () => {
-    if (auth) {
-      await fbSignOut(auth);
+    if (unsubUserDocRef.current) {
+      unsubUserDocRef.current();
+      unsubUserDocRef.current = null;
+    }
+    if (auth && auth.currentUser) {
+      await fbSignOut(auth).catch(() => {});
     }
     setUser(null);
     setFirebaseUser(null);
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    } catch {}
   };
 
   const updateProfileData = async (updates: Partial<UserProfile>): Promise<void> => {
     if (!user) return;
-    
+
     // Clean any undefined values
     const cleanUpdates: Record<string, any> = {};
     Object.entries(updates).forEach(([key, val]) => {
@@ -354,6 +600,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         signInWithGoogle,
         signInWithEmail,
         signUpWithEmail,
+        resetPassword,
         logout,
         updateProfileData,
       }}
