@@ -1225,17 +1225,23 @@ const MainAppContent: React.FC = () => {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#07090E] flex items-center justify-center p-4 text-white">
+      <div className="min-h-screen bg-[#040810] flex items-center justify-center p-4 text-white selection:bg-emerald-500/30 selection:text-white">
         <div className="text-center space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-400">
-            <Loader2 className="w-6 h-6 animate-spin" />
+          <div className="relative w-14 h-14 mx-auto flex items-center justify-center">
+            <div className="absolute inset-0 rounded-2xl bg-emerald-500/20 blur-lg animate-pulse" />
+            <div className="w-14 h-14 rounded-2xl bg-[#081524] border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-950/50">
+              <Loader2 className="w-7 h-7 animate-spin text-[#00DF89]" />
+            </div>
           </div>
-          <div className="space-y-1">
-            <p className="font-bold text-base text-white tracking-tight">
-              LiteNote
+          <div className="space-y-1.5">
+            <p className="font-extrabold text-lg text-white tracking-tight flex items-center justify-center gap-2">
+              <span>LiteNote</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-medium border border-emerald-500/30">
+                FORUM
+              </span>
             </p>
             <p className="text-xs text-slate-400 font-mono">
-              Подключение к защищенной сети...
+              {language === 'ru' ? 'Синхронизация защищенного хаба...' : 'Connecting to sovereign network...'}
             </p>
           </div>
         </div>

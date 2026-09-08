@@ -13,11 +13,12 @@ import {
   GoogleAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInAnonymously,
   signOut as fbSignOut,
   onAuthStateChanged,
   User as FirebaseUser
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
 import { UserProfile, AccentColor, Language, ActiveTab } from '../types';
 
 interface AuthContextType {
@@ -219,9 +220,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const signInWithEmail = async (email: string, pass: string) => {
+  const signInWithEmail = async (emailOrHandle: string, pass: string) => {
     if (!auth) throw new Error('Firebase Auth not initialized');
-    await signInWithEmailAndPassword(auth, email.trim(), pass);
+    let targetEmail = emailOrHandle.trim();
+    if (!targetEmail.includes('@')) {
+      const cleanHandle = targetEmail.replace(/^@/, '').toLowerCase();
+      try {
+        const q = query(collection(db, 'users'), where('handle', '==', cleanHandle));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const matchedData = snap.docs[0].data();
+          if (matchedData?.email) {
+            targetEmail = matchedData.email;
+          }
+        }
+      } catch (err) {
+        console.warn('Handle lookup failed, trying as raw email:', err);
+      }
+    }
+    await signInWithEmailAndPassword(auth, targetEmail, pass);
   };
 
   const signUpWithEmail = async (email: string, pass: string, displayName: string, handle: string) => {
