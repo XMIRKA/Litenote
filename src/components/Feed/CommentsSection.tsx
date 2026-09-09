@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { translations } from '../../lib/i18n';
 import { THEME_CONFIGS } from '../../lib/theme';
-import { Comment } from '../../types';
+import { Comment, UserProfile } from '../../types';
 import { CreatorBadge, CoFounderBadge, VerifiedCheck } from '../Common/CreatorBadge';
 import { isCreatorAccount, isCoFounderAccount } from '../../lib/creator';
 import { getCleanAvatarUrl } from '../../lib/avatar';
@@ -11,6 +11,7 @@ import { Send, Reply, CornerDownRight, X, Trash2 } from 'lucide-react';
 interface CommentsSectionProps {
   postId: string;
   comments: Comment[];
+  allUsers?: UserProfile[];
   onAddComment: (postId: string, content: string, parentId?: string) => void;
   onDeleteComment?: (commentId: string, postId: string) => void;
 }
@@ -18,6 +19,7 @@ interface CommentsSectionProps {
 export const CommentsSection: React.FC<CommentsSectionProps> = ({
   postId,
   comments,
+  allUsers,
   onAddComment,
   onDeleteComment,
 }) => {
@@ -59,6 +61,7 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({
   const canDeleteComment = (comment: Comment) => {
     if (!user) return false;
     if (user.uid === comment.authorId) return true;
+    if (user.handle && comment.authorHandle && user.handle.toLowerCase().replace(/^@/, '') === comment.authorHandle.toLowerCase().replace(/^@/, '')) return true;
     if (isCreatorAccount(user)) return true;
     return false;
   };
@@ -125,9 +128,14 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({
           rootComments.map((comment) => {
             const childComments = getChildComments(comment.id);
             const isSelf = user?.uid === comment.authorId;
-            const authorDisplayName = isSelf ? (user.displayName || comment.authorName) : comment.authorName;
-            const authorHandle = isSelf ? (user.handle || comment.authorHandle) : comment.authorHandle;
-            const authorAvatar = isSelf ? (user.avatarUrl || comment.authorAvatar) : comment.authorAvatar;
+            const authorProfile = (allUsers || []).find(
+              (u) =>
+                (comment.authorId && u.uid === comment.authorId) ||
+                (comment.authorHandle && u.handle?.toLowerCase().replace(/^@/, '') === comment.authorHandle.toLowerCase().replace(/^@/, ''))
+            );
+            const authorDisplayName = isSelf ? (user.displayName || comment.authorName) : (authorProfile?.displayName || comment.authorName);
+            const authorHandle = isSelf ? (user.handle || comment.authorHandle) : (authorProfile?.handle || comment.authorHandle);
+            const authorAvatar = isSelf ? (user.avatarUrl || comment.authorAvatar) : (authorProfile?.avatarUrl || comment.authorAvatar);
 
             const isCommentCreator = isCreatorAccount({
               handle: authorHandle,
@@ -222,9 +230,14 @@ export const CommentsSection: React.FC<CommentsSectionProps> = ({
                 {/* Child Replies */}
                 {childComments.map((child) => {
                   const isChildSelf = user?.uid === child.authorId;
-                  const childDisplayName = isChildSelf ? (user.displayName || child.authorName) : child.authorName;
-                  const childHandle = isChildSelf ? (user.handle || child.authorHandle) : child.authorHandle;
-                  const childAvatar = isChildSelf ? (user.avatarUrl || child.authorAvatar) : child.authorAvatar;
+                  const childAuthorProfile = (allUsers || []).find(
+                    (u) =>
+                      (child.authorId && u.uid === child.authorId) ||
+                      (child.authorHandle && u.handle?.toLowerCase().replace(/^@/, '') === child.authorHandle.toLowerCase().replace(/^@/, ''))
+                  );
+                  const childDisplayName = isChildSelf ? (user.displayName || child.authorName) : (childAuthorProfile?.displayName || child.authorName);
+                  const childHandle = isChildSelf ? (user.handle || child.authorHandle) : (childAuthorProfile?.handle || child.authorHandle);
+                  const childAvatar = isChildSelf ? (user.avatarUrl || child.authorAvatar) : (childAuthorProfile?.avatarUrl || child.authorAvatar);
 
                   const isChildCreator = isCreatorAccount({
                     handle: childHandle,

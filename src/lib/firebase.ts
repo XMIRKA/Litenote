@@ -1289,6 +1289,30 @@ export async function syncUserProfileToConversations(user: UserProfile): Promise
 }
 
 // -------------------------------------------------------------
+// Synchronize User Nickname & Avatar to All Authored Posts
+// -------------------------------------------------------------
+export async function syncUserProfileToPosts(user: UserProfile): Promise<void> {
+  if (!user?.uid) return;
+  try {
+    const q = query(
+      collection(db, 'posts'),
+      where('authorId', '==', user.uid)
+    );
+    const snap = await getDocs(q);
+    const updatePromises = snap.docs.map((docSnap) => {
+      return updateDoc(docSnap.ref, {
+        authorName: user.displayName,
+        authorHandle: user.handle,
+        authorAvatar: user.avatarUrl,
+      }).catch((e) => console.warn('Sync post author error:', e));
+    });
+    await Promise.all(updatePromises);
+  } catch (error) {
+    console.warn('Error syncing profile to posts:', error);
+  }
+}
+
+// -------------------------------------------------------------
 // Moderator & Administration Management
 // -------------------------------------------------------------
 export async function setUserPenaltyDoc(

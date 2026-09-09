@@ -6,7 +6,8 @@ import {
   saveProfile,
   checkHandleAvailable,
   cleanFirestoreData,
-  syncUserProfileToConversations
+  syncUserProfileToConversations,
+  syncUserProfileToPosts
 } from '../lib/firebase';
 import {
   signInWithPopup,
@@ -19,6 +20,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
 import { UserProfile, AccentColor, Language, ActiveTab } from '../types';
+import { applyThemeToDocument } from '../lib/theme';
 
 export async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -82,11 +84,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const [accentColor, setAccentColorState] = useState<AccentColor>(() => {
     try {
-      return (localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY) as AccentColor) || 'violet';
+      const stored = localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY) as AccentColor;
+      const initial = stored || 'emerald';
+      applyThemeToDocument(initial);
+      return initial;
     } catch {
-      return 'violet';
+      applyThemeToDocument('emerald');
+      return 'emerald';
     }
   });
+
+  useEffect(() => {
+    applyThemeToDocument(accentColor);
+  }, [accentColor]);
 
   const [language, setLanguageState] = useState<Language>(() => {
     try {
@@ -99,8 +109,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const setAccentColor = (color: AccentColor) => {
     setAccentColorState(color);
     localStorage.setItem(LOCAL_STORAGE_ACCENT_KEY, color);
+    applyThemeToDocument(color);
     if (user) {
-      updateProfileData({ accentColor: color });
+      updateProfileData({ accentColor: color }).catch((err) => {
+        console.warn('Silent sync accentColor to profile:', err);
+      });
     }
   };
 
@@ -568,8 +581,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const cleaned = cleanFirestoreData(cleanUpdates);
         await setDoc(doc(db, 'users', user.uid), cleaned, { merge: true });
-        // Automatically sync updated name/handle/avatar to conversation documents
+        // Automatically sync updated name/handle/avatar to conversation and post documents
         syncUserProfileToConversations(updated).catch(() => {});
+        syncUserProfileToPosts(updated).catch(() => {});
       } catch (err) {
         console.error('Could not sync user profile update to Firestore:', err);
         throw err;

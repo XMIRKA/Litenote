@@ -125,42 +125,74 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* 2. Interface Language */}
       <div className="p-5 rounded-2xl bg-[#0F172A] border border-[#1E293B] space-y-3">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
-          <Globe className="w-4 h-4 text-indigo-400" />
+          <Globe className="w-4 h-4" style={{ color: theme.hex }} />
           <span>{language === 'ru' ? 'Язык интерфейса' : 'Interface Language'}</span>
         </div>
         <div className="grid grid-cols-2 gap-3 max-w-md">
           <button
             onClick={() => setLanguage('ru')}
+            style={
+              language === 'ru'
+                ? {
+                    borderColor: theme.hex,
+                    backgroundColor: `${theme.hex}18`,
+                    color: '#FFFFFF',
+                  }
+                : undefined
+            }
             className={`p-3 rounded-xl border text-xs font-medium flex items-center justify-between transition-all cursor-pointer ${
               language === 'ru'
-                ? 'border-indigo-500 bg-indigo-500/15 text-white font-semibold'
+                ? 'font-semibold shadow-xs'
                 : 'border-[#1E293B] text-slate-400 hover:text-white hover:bg-slate-800/40'
             }`}
           >
             <span>Русский (RU)</span>
-            {language === 'ru' && <Check className="w-4 h-4 text-indigo-400" />}
+            {language === 'ru' && <Check className="w-4 h-4" style={{ color: theme.hex }} />}
           </button>
 
           <button
             onClick={() => setLanguage('en')}
+            style={
+              language === 'en'
+                ? {
+                    borderColor: theme.hex,
+                    backgroundColor: `${theme.hex}18`,
+                    color: '#FFFFFF',
+                  }
+                : undefined
+            }
             className={`p-3 rounded-xl border text-xs font-medium flex items-center justify-between transition-all cursor-pointer ${
               language === 'en'
-                ? 'border-indigo-500 bg-indigo-500/15 text-white font-semibold'
+                ? 'font-semibold shadow-xs'
                 : 'border-[#1E293B] text-slate-400 hover:text-white hover:bg-slate-800/40'
             }`}
           >
             <span>English (EN)</span>
-            {language === 'en' && <Check className="w-4 h-4 text-indigo-400" />}
+            {language === 'en' && <Check className="w-4 h-4" style={{ color: theme.hex }} />}
           </button>
         </div>
       </div>
 
       {/* 3. Accent Theme */}
       <div className="p-5 rounded-2xl bg-[#0F172A] border border-[#1E293B] space-y-3">
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
-          <Palette className="w-4 h-4 text-indigo-400" />
-          <span>{language === 'ru' ? 'Цветовой акцент' : 'Color Theme Accent'}</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
+            <Palette className="w-4 h-4" style={{ color: theme.hex }} />
+            <span>{language === 'ru' ? 'Цветовой акцент' : 'Color Theme Accent'}</span>
+          </div>
+          <span
+            className="text-[11px] font-mono px-2.5 py-0.5 rounded-full font-semibold border flex items-center gap-1.5 transition-colors"
+            style={{
+              borderColor: `${theme.hex}50`,
+              backgroundColor: `${theme.hex}15`,
+              color: theme.hex,
+            }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: theme.hex }} />
+            {theme.name}
+          </span>
         </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
           {(['emerald', 'cyan', 'amber', 'violet', 'lime'] as AccentColor[]).map((col) => {
             const conf = THEME_CONFIGS[col];
@@ -168,20 +200,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             return (
               <button
                 key={col}
+                type="button"
                 onClick={() => setAccentColor(col)}
-                className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer ${
+                style={
                   isSelected
-                    ? `${conf.borderClass} bg-slate-800/60 shadow-lg ring-1 ${conf.borderClass}`
-                    : 'border-[#1E293B] hover:border-slate-700 bg-slate-900/40'
+                    ? {
+                        borderColor: conf.hex,
+                        backgroundColor: `${conf.hex}1a`,
+                        boxShadow: `0 0 20px rgba(${conf.rgb}, 0.35)`,
+                      }
+                    : undefined
+                }
+                className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer relative group active:scale-95 ${
+                  isSelected
+                    ? 'ring-1 border-current'
+                    : 'border-[#1E293B] hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80'
                 }`}
               >
                 <div
-                  className="w-5 h-5 rounded-full shadow"
+                  className="w-5 h-5 rounded-full shadow-md flex items-center justify-center relative transition-transform group-hover:scale-110"
                   style={{ backgroundColor: conf.hex }}
-                />
+                >
+                  {isSelected && <Check className="w-3 h-3 text-slate-950 stroke-[3]" />}
+                </div>
                 <span
-                  className={`text-xs font-medium ${
-                    isSelected ? 'text-white font-semibold' : 'text-slate-400'
+                  className={`text-xs transition-colors ${
+                    isSelected ? 'text-white font-bold' : 'text-slate-400 group-hover:text-slate-200 font-medium'
                   }`}
                 >
                   {conf.name}
@@ -195,7 +239,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* 4. Privacy & Messages */}
       <div className="p-5 rounded-2xl bg-[#0F172A] border border-[#1E293B] space-y-4">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
-          <Shield className="w-4 h-4 text-indigo-400" />
+          <Shield className="w-4 h-4" style={{ color: theme.hex }} />
           <span>{language === 'ru' ? 'Приватность и сообщения' : 'Privacy & Security'}</span>
         </div>
 
@@ -207,9 +251,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => handleSavePrivacy('all', profileVis, showOnline)}
+                style={
+                  allowDMs === 'all'
+                    ? {
+                        borderColor: theme.hex,
+                        backgroundColor: `${theme.hex}18`,
+                        color: '#FFFFFF',
+                      }
+                    : undefined
+                }
                 className={`p-2.5 rounded-xl border text-xs transition-all cursor-pointer ${
                   allowDMs === 'all'
-                    ? 'border-indigo-500 bg-indigo-500/15 text-white font-semibold'
+                    ? 'font-semibold'
                     : 'border-[#1E293B] text-slate-400 hover:text-white'
                 }`}
               >
@@ -217,9 +270,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
               <button
                 onClick={() => handleSavePrivacy('friends', profileVis, showOnline)}
+                style={
+                  allowDMs === 'friends'
+                    ? {
+                        borderColor: theme.hex,
+                        backgroundColor: `${theme.hex}18`,
+                        color: '#FFFFFF',
+                      }
+                    : undefined
+                }
                 className={`p-2.5 rounded-xl border text-xs transition-all cursor-pointer ${
                   allowDMs === 'friends'
-                    ? 'border-indigo-500 bg-indigo-500/15 text-white font-semibold'
+                    ? 'font-semibold'
                     : 'border-[#1E293B] text-slate-400 hover:text-white'
                 }`}
               >
@@ -235,9 +297,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => handleSavePrivacy(allowDMs, 'all', showOnline)}
+                style={
+                  profileVis === 'all'
+                    ? {
+                        borderColor: theme.hex,
+                        backgroundColor: `${theme.hex}18`,
+                        color: '#FFFFFF',
+                      }
+                    : undefined
+                }
                 className={`p-2.5 rounded-xl border text-xs transition-all cursor-pointer ${
                   profileVis === 'all'
-                    ? 'border-indigo-500 bg-indigo-500/15 text-white font-semibold'
+                    ? 'font-semibold'
                     : 'border-[#1E293B] text-slate-400 hover:text-white'
                 }`}
               >
@@ -245,9 +316,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
               <button
                 onClick={() => handleSavePrivacy(allowDMs, 'friends', showOnline)}
+                style={
+                  profileVis === 'friends'
+                    ? {
+                        borderColor: theme.hex,
+                        backgroundColor: `${theme.hex}18`,
+                        color: '#FFFFFF',
+                      }
+                    : undefined
+                }
                 className={`p-2.5 rounded-xl border text-xs transition-all cursor-pointer ${
                   profileVis === 'friends'
-                    ? 'border-indigo-500 bg-indigo-500/15 text-white font-semibold'
+                    ? 'font-semibold'
                     : 'border-[#1E293B] text-slate-400 hover:text-white'
                 }`}
               >

@@ -231,7 +231,11 @@ export const Header: React.FC<HeaderProps> = ({
         {user && (
           <button
             onClick={() => setOpenCreatePost(true)}
-            className="flex items-center gap-1.5 p-2 sm:px-4 sm:py-2 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 hover:brightness-110 text-slate-950 shadow-[0_0_15px_rgba(16,185,129,0.3)] active:scale-95 transition-all cursor-pointer"
+            style={{
+              backgroundColor: theme.hex,
+              boxShadow: `0 0 15px rgba(${theme.rgb}, 0.35)`,
+            }}
+            className="flex items-center gap-1.5 p-2 sm:px-4 sm:py-2 rounded-full text-xs font-bold hover:brightness-110 text-slate-950 active:scale-95 transition-all cursor-pointer"
             title={language === 'ru' ? 'Создать пост' : 'New Post'}
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -242,10 +246,10 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Language switch */}
         <button
           onClick={() => setLanguage(language === 'en' ? 'ru' : 'en')}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-[#0E1526] border border-[#1A243A] hover:border-emerald-500/40 text-xs font-medium text-slate-300 hover:text-white transition-all cursor-pointer active:scale-95"
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-[#0E1526] border border-[#1A243A] hover:border-slate-600 text-xs font-medium text-slate-300 hover:text-white transition-all cursor-pointer active:scale-95"
           title={language === 'ru' ? 'Сменить язык' : 'Change Language'}
         >
-          <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <Globe className="w-3.5 h-3.5 shrink-0" style={{ color: theme.hex }} />
           <span className="text-[10px] sm:text-[11px] font-mono">{language.toUpperCase()}</span>
         </button>
 
@@ -253,7 +257,7 @@ export const Header: React.FC<HeaderProps> = ({
         {user && (
           <button
             onClick={onOpenNotifications}
-            className="p-2 rounded-full bg-[#0E1526] border border-[#1A243A] hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all relative cursor-pointer active:scale-95"
+            className="p-2 rounded-full bg-[#0E1526] border border-[#1A243A] hover:border-slate-600 text-slate-300 hover:text-white transition-all relative cursor-pointer active:scale-95"
             title={language === 'ru' ? 'Уведомления' : 'Notifications'}
           >
             <Bell className="w-4 h-4" />
@@ -269,10 +273,20 @@ export const Header: React.FC<HeaderProps> = ({
         {user && (
           <button
             onClick={() => setActiveTab('settings')}
+            style={
+              activeTab === 'settings'
+                ? {
+                    borderColor: theme.hex,
+                    color: theme.hex,
+                    backgroundColor: `${theme.hex}20`,
+                    boxShadow: `0 0 10px rgba(${theme.rgb}, 0.3)`,
+                  }
+                : undefined
+            }
             className={`p-2 rounded-full border transition-all cursor-pointer active:scale-95 ${
               activeTab === 'settings'
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
-                : 'bg-[#0E1526] border-[#1A243A] hover:border-emerald-500/40 text-slate-300 hover:text-white'
+                ? 'shadow-sm'
+                : 'bg-[#0E1526] border-[#1A243A] hover:border-slate-600 text-slate-300 hover:text-white'
             }`}
             title={language === 'ru' ? 'Настройки' : 'Settings'}
           >

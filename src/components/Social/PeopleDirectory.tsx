@@ -173,43 +173,68 @@ export const PeopleDirectory: React.FC<PeopleDirectoryProps> = ({
     return list;
   })();
 
-  // Core Developers List: Creator + Patrick Jane + Added Developers
+  // Core Developers List: Creator (Dexter) + Patrick Jane + Custom Added Developers
   const devTeamUsers: (UserProfile & { customRole?: string })[] = (() => {
     const team: (UserProfile & { customRole?: string })[] = [];
 
-    // 1. Current user if creator
-    if (user && isCurrentUserCreator) {
-      team.push({
-        ...user,
-        customRole: language === 'ru' ? 'Основатель & Lead Developer' : 'Founder & Lead Developer',
-      });
-    } else {
-      // Find creator in all users or provide default
-      const foundCreator = mergedUsers.find((u) => isCreatorAccount(u));
-      if (foundCreator) {
-        team.push({
-          ...foundCreator,
-          customRole: language === 'ru' ? 'Основатель & Lead Developer' : 'Founder & Lead Developer',
-        });
-      } else {
-        team.push({
-          uid: 'creator_mirkamol_core',
-          email: 'mirkamolaliserov87@gmail.com',
-          displayName: 'Mirkamol (Creator)',
-          handle: 'mirkamol',
-          avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=mirkamol',
-          bio: 'Официальный создатель и главный архитектор платформы Litenote',
-          status: 'online',
-          customRole: language === 'ru' ? 'Основатель & Lead Developer' : 'Founder & Lead Developer',
-        } as any);
-      }
-    }
+    // 1. Founder & Lead Developer: Always Dexter (@developer)
+    const isCurrentLoggedInUserDexter = Boolean(
+      user &&
+      (user.uid === 'n6aZieUx5GWjq9HZMWxCNWaB4pD2' ||
+       user.handle?.toLowerCase().replace(/^@/, '') === 'developer' ||
+       user.handle?.toLowerCase().replace(/^@/, '') === 'dexter')
+    );
+
+    const dexterUser =
+      (isCurrentLoggedInUserDexter ? user : null) ||
+      allUsers.find((u) => u.uid === 'n6aZieUx5GWjq9HZMWxCNWaB4pD2') ||
+      allUsers.find((u) => u.handle?.toLowerCase().replace(/^@/, '') === 'developer') ||
+      allUsers.find((u) => u.handle?.toLowerCase().replace(/^@/, '') === 'dexter') ||
+      mergedUsers.find((u) => u.uid === 'n6aZieUx5GWjq9HZMWxCNWaB4pD2') ||
+      mergedUsers.find((u) => u.handle?.toLowerCase().replace(/^@/, '') === 'developer');
+
+    const dexterBase: UserProfile = dexterUser || {
+      uid: 'n6aZieUx5GWjq9HZMWxCNWaB4pD2',
+      email: 'mirkamolaliserov87@gmail.com',
+      displayName: 'Dexter',
+      handle: 'developer',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=200&fit=crop&crop=faces',
+      bannerUrl: '',
+      bio: 'Основатель & Lead Developer • Создатель платформы Litenote',
+      status: 'online',
+      accentColor: 'emerald',
+      language: 'ru',
+      role: 'creator',
+      createdAt: 1704067200000,
+      badges: ['matrix_architect', 'cyber_pioneer'],
+      privacy: { profileVisibility: 'all', allowDMs: 'all', showOnlineStatus: true },
+      stats: { postsCount: 1, friendsCount: 10, followersCount: 120, followingCount: 5 },
+    };
+
+    const effectiveDexter: UserProfile = {
+      ...dexterBase,
+      ...(isCurrentLoggedInUserDexter && user ? user : {}),
+      displayName: (isCurrentLoggedInUserDexter && user?.displayName) ? user.displayName : dexterBase.displayName,
+      handle: (isCurrentLoggedInUserDexter && user?.handle) ? user.handle : dexterBase.handle,
+      avatarUrl: (isCurrentLoggedInUserDexter && user?.avatarUrl) ? user.avatarUrl : dexterBase.avatarUrl,
+      role: 'creator',
+    };
+
+    team.push({
+      ...effectiveDexter,
+      customRole: language === 'ru' ? 'Основатель & Lead Developer' : 'Founder & Lead Developer',
+    });
 
     // 2. Patrick Jane (Co-Founder) - from allUsers/current user or default
+    const isCurrentLoggedInUserPatrick = Boolean(
+      user && (isCoFounderAccount(user) || user.handle?.toLowerCase().includes('patrick') || user.handle?.toLowerCase() === 'detective')
+    );
+
     const foundPatrick =
-      (user && isCoFounderAccount(user) ? user : null) ||
-      mergedUsers.find((u) => isCoFounderAccount(u)) ||
+      (isCurrentLoggedInUserPatrick ? user : null) ||
+      allUsers.find((u) => u.handle?.toLowerCase() === 'detective') ||
       allUsers.find((u) => isCoFounderAccount(u)) ||
+      mergedUsers.find((u) => isCoFounderAccount(u)) ||
       allUsers.find(
         (u) =>
           (u.handle || '').toLowerCase().includes('patrick') ||
@@ -219,7 +244,8 @@ export const PeopleDirectory: React.FC<PeopleDirectoryProps> = ({
 
     const effectivePatrick: UserProfile = {
       ...foundPatrick,
-      avatarUrl: (user && isCoFounderAccount(user) && user.avatarUrl) ? user.avatarUrl : (foundPatrick.avatarUrl || PATRICK_JANE_USER.avatarUrl),
+      avatarUrl: (isCurrentLoggedInUserPatrick && user?.avatarUrl) ? user.avatarUrl : (foundPatrick.avatarUrl || PATRICK_JANE_USER.avatarUrl),
+      status: isCurrentLoggedInUserPatrick ? 'online' : (foundPatrick.status || 'online'),
     };
 
     if (
@@ -451,7 +477,7 @@ export const PeopleDirectory: React.FC<PeopleDirectoryProps> = ({
         ) : (
           displayUsers.map((target) => {
             const isOwn = user?.uid === target.uid;
-            const isTargetCreator = isCreatorAccount(target) || (isOwn && isCurrentUserCreator);
+            const isTargetCreator = isCreatorAccount(target);
             const isTargetCoFounder = isCoFounderAccount(target);
             const isFriend = acceptedFriendIds.includes(target.uid);
             const isFollowing = followedUserIds.includes(target.uid);

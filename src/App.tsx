@@ -51,6 +51,7 @@ import {
   togglePostReaction,
   deletePostDoc,
   createCommentDoc,
+  deleteCommentDoc,
   sendMessageDoc,
   markConversationMessagesReadDoc,
   startDirectConversationDoc,
@@ -93,12 +94,40 @@ const MainAppContent: React.FC = () => {
     language,
   } = useAuth();
 
-  // Application Data States (Clean & synced via Firestore)
-  const [posts, setPosts] = useState<Post[]>([]);
+  // Application Data States (Clean & synced via Firestore with instant 0ms localStorage cache)
+  const [posts, setPosts] = useState<Post[]>(() => {
+    try {
+      const cached = localStorage.getItem('litenote_cache_posts');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [comments, setComments] = useState<Record<string, Comment[]>>({});
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [messages, setMessages] = useState<Record<string, Message[]>>({});
-  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    try {
+      const cached = localStorage.getItem('litenote_cache_conversations');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [messages, setMessages] = useState<Record<string, Message[]>>(() => {
+    try {
+      const cached = localStorage.getItem('litenote_cache_messages');
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [allUsers, setAllUsers] = useState<UserProfile[]>(() => {
+    try {
+      const cached = localStorage.getItem('litenote_cache_all_users');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [friendships, setFriendships] = useState<Friendship[]>([]);
   const [follows, setFollows] = useState<Follow[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -173,6 +202,9 @@ const MainAppContent: React.FC = () => {
   useEffect(() => {
     const unsub = subscribePosts((fetchedPosts) => {
       setPosts(fetchedPosts);
+      try {
+        localStorage.setItem('litenote_cache_posts', JSON.stringify(fetchedPosts.slice(0, 100)));
+      } catch (e) {}
     });
     return () => unsub();
   }, []);
@@ -181,6 +213,9 @@ const MainAppContent: React.FC = () => {
   useEffect(() => {
     const unsub = subscribeUsers((fetchedUsers) => {
       setAllUsers(fetchedUsers);
+      try {
+        localStorage.setItem('litenote_cache_all_users', JSON.stringify(fetchedUsers));
+      } catch (e) {}
     });
     return () => unsub();
   }, []);
@@ -198,6 +233,9 @@ const MainAppContent: React.FC = () => {
 
     const unsubConvs = subscribeConversations(user.uid, (convs) => {
       setConversations(convs);
+      try {
+        localStorage.setItem('litenote_cache_conversations', JSON.stringify(convs));
+      } catch (e) {}
     });
 
     const unsubFriends = subscribeFriendships(user.uid, (friends) => {
@@ -261,10 +299,16 @@ const MainAppContent: React.FC = () => {
     if (!selectedConvId) return;
 
     const unsub = subscribeMessages(selectedConvId, (msgs) => {
-      setMessages((prev) => ({
-        ...prev,
-        [selectedConvId]: msgs,
-      }));
+      setMessages((prev) => {
+        const next = {
+          ...prev,
+          [selectedConvId]: msgs,
+        };
+        try {
+          localStorage.setItem('litenote_cache_messages', JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
 
       // Automatically sync read status for messages sent by others
       if (user?.uid) {
@@ -380,13 +424,14 @@ const MainAppContent: React.FC = () => {
     }
   };
 
-  const handleAddComment = async (postId: string, content: string, parentId?: string) => {
+  const handleAddComment = async (postId: string, content: string, parentId?: string, commentId?: string) => {
     if (!user) {
       setIsAuthModalOpen(true);
       return;
     }
+    const finalCommentId = commentId || `c_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newComment: Comment = {
-      id: `c_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      id: finalCommentId,
       postId,
       authorId: user.uid,
       authorName: user.displayName,
@@ -399,10 +444,16 @@ const MainAppContent: React.FC = () => {
     };
 
     // Optimistic comments and post commentsCount update
-    setComments((prev) => ({
-      ...prev,
-      [postId]: [...(prev[postId] || []), newComment],
-    }));
+    setComments((prev) => {
+      const existing = prev[postId] || [];
+      if (existing.some((c) => c.id === finalCommentId)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [postId]: [...existing, newComment],
+      };
+    });
 
     setPosts((prev) =>
       prev.map((p) =>
@@ -434,6 +485,27 @@ const MainAppContent: React.FC = () => {
       }
     } catch (err) {
       console.error('Error adding comment:', err);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string, postId: string) => {
+    setComments((prev) => ({
+      ...prev,
+      [postId]: (prev[postId] || []).filter((c) => c.id !== commentId && c.parentId !== commentId),
+    }));
+
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? { ...p, commentsCount: Math.max(0, (p.commentsCount || 1) - 1) }
+          : p
+      )
+    );
+
+    try {
+      await deleteCommentDoc(commentId, postId);
+    } catch (err) {
+      console.error('Error deleting comment in App:', err);
     }
   };
 
@@ -1347,9 +1419,11 @@ const MainAppContent: React.FC = () => {
                 posts={posts}
                 comments={comments}
                 bookmarkedPostIds={bookmarkedPostIds}
+                allUsers={effectiveAllUsers}
                 onToggleReaction={handleToggleReaction}
                 onToggleBookmark={handleToggleBookmark}
                 onAddComment={handleAddComment}
+                onDeleteComment={handleDeleteComment}
                 onVotePoll={handleVotePoll}
                 onDeletePost={handleDeletePost}
               />

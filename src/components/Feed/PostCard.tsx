@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { translations } from '../../lib/i18n';
 import { THEME_CONFIGS } from '../../lib/theme';
-import { Post, Comment } from '../../types';
+import { Post, Comment, UserProfile } from '../../types';
 import { CommentsSection } from './CommentsSection';
 import { CreatorBadge, CoFounderBadge, VerifiedCheck } from '../Common/CreatorBadge';
 import { isCreatorAccount, isCoFounderAccount } from '../../lib/creator';
 import { getCleanAvatarUrl } from '../../lib/avatar';
 import { subscribeComments, deleteCommentDoc } from '../../lib/firebase';
+import { MediaViewerModal } from '../Messenger/MediaViewerModal';
 import {
   MessageSquare,
   Bookmark,
@@ -34,9 +35,10 @@ interface PostCardProps {
   post: Post;
   comments: Comment[];
   isBookmarked: boolean;
+  allUsers?: UserProfile[];
   onToggleReaction: (postId: string, emoji: string) => void;
   onToggleBookmark: (postId: string) => void;
-  onAddComment: (postId: string, content: string, parentId?: string) => void;
+  onAddComment: (postId: string, content: string, parentId?: string, commentId?: string) => void;
   onDeleteComment?: (commentId: string, postId: string) => void;
   onSelectTag?: (tag: string) => void;
   onDeletePost?: (postId: string) => void;
@@ -49,9 +51,11 @@ export const PostCard: React.FC<PostCardProps> = ({
   post,
   comments,
   isBookmarked,
+  allUsers,
   onToggleReaction,
   onToggleBookmark,
   onAddComment,
+  onDeleteComment,
   onSelectTag,
   onDeletePost,
   onVotePoll,
@@ -82,8 +86,9 @@ export const PostCard: React.FC<PostCardProps> = ({
 
   const handleAddNewComment = (postId: string, content: string, parentId?: string) => {
     if (user) {
+      const commentId = `c_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
       const optimisticComment: Comment = {
-        id: `c_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        id: commentId,
         postId,
         authorId: user.uid,
         authorName: user.displayName,
@@ -95,8 +100,8 @@ export const PostCard: React.FC<PostCardProps> = ({
         reactions: {},
       };
       setLocalComments((prev) => [...prev, optimisticComment]);
+      onAddComment(postId, content, parentId, commentId);
     }
-    onAddComment(postId, content, parentId);
   };
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -111,6 +116,7 @@ export const PostCard: React.FC<PostCardProps> = ({
   const [isTranslating, setIsTranslating] = useState(false);
   const [isShowingTranslation, setIsShowingTranslation] = useState(false);
   const [translatedLang, setTranslatedLang] = useState<string>('');
+  const [isMediaViewerOpen, setIsMediaViewerOpen] = useState(false);
 
   const handleTranslate = async () => {
     if (translatedText && translatedLang === language) {
@@ -173,10 +179,21 @@ export const PostCard: React.FC<PostCardProps> = ({
     }, 200);
   };
 
-  const isOwnPost = user?.uid === post.authorId;
-  const authorName = isOwnPost && user ? user.displayName : post.authorName;
-  const authorHandle = isOwnPost && user ? user.handle : post.authorHandle;
-  const authorAvatar = isOwnPost && user ? user.avatarUrl : post.authorAvatar;
+  const isOwnPost =
+    Boolean(user?.uid && post.authorId && user.uid === post.authorId) ||
+    Boolean(user?.handle && post.authorHandle && user.handle.toLowerCase().replace(/^@/, '') === post.authorHandle.toLowerCase().replace(/^@/, ''));
+
+  const authorProfile = (allUsers || []).find(
+    (u) =>
+      (post.authorId && u.uid === post.authorId) ||
+      (post.authorHandle && u.handle?.toLowerCase().replace(/^@/, '') === post.authorHandle.toLowerCase().replace(/^@/, ''))
+  );
+
+  const effectiveAuthor = isOwnPost && user ? user : authorProfile;
+
+  const authorName = effectiveAuthor?.displayName || post.authorName;
+  const authorHandle = effectiveAuthor?.handle || post.authorHandle;
+  const authorAvatar = (isOwnPost && user?.avatarUrl) ? user.avatarUrl : (authorProfile?.avatarUrl || post.authorAvatar);
 
   const isAuthorCreator =
     (isOwnPost && isCreatorAccount(user)) ||
@@ -216,7 +233,9 @@ export const PostCard: React.FC<PostCardProps> = ({
   };
 
   const handleShare = () => {
-    const url = window.location.origin + '#post-' + post.id;
+    const isCustomDomain = window.location.hostname.includes('litenote.forum');
+    const baseUrl = isCustomDomain ? window.location.origin : 'https://litenote.forum';
+    const url = `${baseUrl}#post-${post.id}`;
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
@@ -398,14 +417,33 @@ export const PostCard: React.FC<PostCardProps> = ({
 
       {/* Image / Media Attachment */}
       {post.mediaUrl && (
-        <div className="rounded-xl overflow-hidden border border-[#1E293B] bg-black/40">
-          <img
-            src={post.mediaUrl}
-            alt="Post media"
-            className="w-full max-h-96 object-cover hover:scale-[1.01] transition-transform duration-300 cursor-pointer"
-            onClick={() => window.open(post.mediaUrl, '_blank')}
+        <>
+          <div
+            onClick={() => setIsMediaViewerOpen(true)}
+            className="rounded-xl overflow-hidden border border-[#1E293B] bg-black/40 cursor-pointer group relative"
+          >
+            <img
+              src={post.mediaUrl}
+              alt="Post media"
+              className="w-full max-h-96 object-cover group-hover:scale-[1.01] transition-transform duration-300"
+            />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
+              <span className="px-3 py-1.5 rounded-lg bg-black/75 backdrop-blur-md text-white text-xs font-medium shadow-lg border border-white/15">
+                {language === 'ru' ? '🔍 Нажмите для полноэкранного просмотра' : '🔍 Click to view full image'}
+              </span>
+            </div>
+          </div>
+
+          <MediaViewerModal
+            isOpen={isMediaViewerOpen}
+            onClose={() => setIsMediaViewerOpen(false)}
+            mediaUrl={post.mediaUrl}
+            mediaType={post.mediaType === 'video' ? 'video' : 'image'}
+            caption={post.content}
+            senderName={post.authorName}
+            createdAt={post.createdAt}
           />
-        </div>
+        </>
       )}
 
       {/* Poll Component */}
@@ -647,10 +685,15 @@ export const PostCard: React.FC<PostCardProps> = ({
           <CommentsSection
             postId={post.id}
             comments={localComments}
+            allUsers={allUsers}
             onAddComment={handleAddNewComment}
             onDeleteComment={async (commentId, pId) => {
               setLocalComments((prev) => prev.filter((c) => c.id !== commentId && c.parentId !== commentId));
-              await deleteCommentDoc(commentId, pId);
+              if (onDeleteComment) {
+                onDeleteComment(commentId, pId);
+              } else {
+                await deleteCommentDoc(commentId, pId);
+              }
             }}
           />
         </div>

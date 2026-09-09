@@ -24,9 +24,10 @@ interface FeedViewProps {
   posts: Post[];
   comments: Record<string, Comment[]>;
   bookmarkedPostIds: string[];
+  allUsers?: UserProfile[];
   onToggleReaction: (postId: string, emoji: string) => void;
   onToggleBookmark: (postId: string) => void;
-  onAddComment: (postId: string, content: string, parentId?: string) => void;
+  onAddComment: (postId: string, content: string, parentId?: string, commentId?: string) => void;
   onDeleteComment?: (commentId: string, postId: string) => void;
   onDeletePost?: (postId: string) => void;
   onVotePoll?: (postId: string, optionIndex: number) => void;
@@ -36,6 +37,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
   posts,
   comments,
   bookmarkedPostIds,
+  allUsers,
   onToggleReaction,
   onToggleBookmark,
   onAddComment,
@@ -270,6 +272,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
               post={post}
               comments={comments[post.id] || []}
               isBookmarked={bookmarkedPostIds.includes(post.id)}
+              allUsers={allUsers}
               onToggleReaction={onToggleReaction}
               onToggleBookmark={onToggleBookmark}
               onAddComment={onAddComment}

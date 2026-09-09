@@ -47,7 +47,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   const theme = THEME_CONFIGS[accentColor];
   const isCreator = isCreatorAccount(user);
 
-  const navItems: { id: ActiveTab; labelEn: string; labelRu: string; icon: React.FC<{ className?: string }>; badge?: number }[] = [
+  const navItems: { id: ActiveTab; labelEn: string; labelRu: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; badge?: number }[] = [
     { id: 'feed', labelEn: 'Coder Feed', labelRu: 'Лента кодеров', icon: Home },
     { id: 'messenger', labelEn: 'Messenger', labelRu: 'Мессенджер', icon: MessageSquare, badge: unreadMessagesCount },
     { id: 'people', labelEn: 'Developers', labelRu: 'Разработчики', icon: Users, badge: pendingFriendRequestsCount },
@@ -79,7 +79,11 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
           <div className="flex flex-col gap-2.5">
             <button
               onClick={() => setOpenCreatePost(true)}
-              className="w-full py-2.5 px-4 rounded-full font-bold text-xs transition-all duration-200 flex items-center justify-center gap-2 bg-[#00DF89] hover:bg-[#00f596] text-[#041912] shadow-[0_0_20px_rgba(0,223,137,0.35)] hover:shadow-[0_0_25px_rgba(0,223,137,0.55)] active:scale-[0.97] cursor-pointer"
+              style={{
+                backgroundColor: theme.hex,
+                boxShadow: `0 0 20px rgba(${theme.rgb}, 0.4)`,
+              }}
+              className="w-full py-2.5 px-4 rounded-full font-bold text-xs transition-all duration-200 flex items-center justify-center gap-2 hover:brightness-110 text-[#041912] active:scale-[0.97] cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>{language === 'ru' ? '+ Создать пост' : '+ New Post'}</span>
@@ -88,10 +92,13 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
             {onOpenDevTools && (
               <button
                 onClick={onOpenDevTools}
-                className="w-full py-2 px-4 rounded-full font-mono text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-[#06121E] hover:bg-[#0B1C2E] text-emerald-300 border border-emerald-500/35 hover:border-emerald-400 active:scale-[0.97] cursor-pointer shadow-sm hover:shadow-[0_0_12px_rgba(16,185,129,0.2)]"
+                style={{
+                  borderColor: `${theme.hex}50`,
+                }}
+                className="w-full py-2 px-4 rounded-full font-mono text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-2 bg-[#06121E] hover:bg-[#0B1C2E] text-slate-200 border hover:border-slate-400 active:scale-[0.97] cursor-pointer shadow-sm"
               >
                 <div className="flex items-center gap-1">
-                  <Zap className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                  <Zap className="w-3.5 h-3.5 animate-pulse" style={{ color: theme.hex }} />
                   <Zap className="w-3.5 h-3.5 text-amber-400" />
                 </div>
                 <span>DevHub & AI</span>
@@ -110,17 +117,27 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                 <button
                   key={item.id}
                   onClick={() => handleTabClick(item.id)}
+                  style={
+                    isActive
+                      ? {
+                          borderColor: theme.hex,
+                          backgroundColor: `${theme.hex}18`,
+                          boxShadow: `0 0 16px rgba(${theme.rgb}, 0.28)`,
+                        }
+                      : undefined
+                  }
                   className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-full text-xs transition-all duration-200 group relative cursor-pointer ${
                     isActive
-                      ? 'bg-[#04241E] text-white font-semibold border border-emerald-500 shadow-[0_0_16px_rgba(16,185,129,0.25)]'
+                      ? 'text-white font-semibold border'
                       : 'text-[#8FA3BF] hover:text-white hover:bg-[#0C192C] border border-transparent hover:border-[#1C2C45]'
                   }`}
                   title={label}
                 >
                   <div className="relative shrink-0">
                     <Icon
+                      style={isActive ? { color: theme.hex } : undefined}
                       className={`w-4 h-4 transition-transform group-hover:scale-110 ${
-                        isActive ? 'text-emerald-400 stroke-[2.2]' : 'text-[#8FA3BF] group-hover:text-emerald-400'
+                        isActive ? 'stroke-[2.2]' : 'text-[#8FA3BF] group-hover:text-white'
                       }`}
                     />
                   </div>
@@ -131,7 +148,10 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
 
                   {/* Badge Count on Desktop (Pill Shape) */}
                   {item.badge && item.badge > 0 ? (
-                    <span className="flex px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500 text-slate-950 font-mono shadow-sm">
+                    <span
+                      style={{ backgroundColor: theme.hex }}
+                      className="flex px-2 py-0.5 text-[10px] font-bold rounded-full text-slate-950 font-mono shadow-sm"
+                    >
                       {item.badge}
                     </span>
                   ) : null}
@@ -211,16 +231,31 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               <button
                 key={item.id}
                 onClick={() => handleTabClick(item.id as ActiveTab)}
+                style={
+                  isActive
+                    ? {
+                        borderColor: theme.hex,
+                        backgroundColor: `${theme.hex}18`,
+                        boxShadow: `0 0 14px rgba(${theme.rgb}, 0.28)`,
+                      }
+                    : undefined
+                }
                 className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all duration-200 relative cursor-pointer min-h-[48px] ${
                   isActive
-                    ? 'bg-[#04241E] text-white border border-emerald-500/80 shadow-[0_0_14px_rgba(16,185,129,0.25)]'
+                    ? 'text-white border'
                     : 'text-slate-400 hover:text-slate-200 border border-transparent'
                 }`}
               >
                 <div className="relative flex items-center justify-center">
-                  <Icon className={`w-4 h-4 transition-transform ${isActive ? 'scale-110 text-emerald-400 stroke-[2.5]' : 'text-slate-400'}`} />
+                  <Icon
+                    style={isActive ? { color: theme.hex } : undefined}
+                    className={`w-4 h-4 transition-transform ${isActive ? 'scale-110 stroke-[2.5]' : 'text-slate-400'}`}
+                  />
                   {item.badge && item.badge > 0 ? (
-                    <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-3.5 px-1 rounded-full bg-emerald-500 text-slate-950 font-bold text-[8px] flex items-center justify-center ring-2 ring-[#070D18]">
+                    <span
+                      style={{ backgroundColor: theme.hex }}
+                      className="absolute -top-1.5 -right-2.5 min-w-[15px] h-3.5 px-1 rounded-full text-slate-950 font-bold text-[8px] flex items-center justify-center ring-2 ring-[#070D18]"
+                    >
                       {item.badge > 99 ? '99+' : item.badge}
                     </span>
                   ) : null}

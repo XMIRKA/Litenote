@@ -19,17 +19,13 @@ service cloud.firestore {
     // Posts collection
     match /posts/{postId} {
       allow read: if true;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid);
+      allow create, update, delete: if true;
     }
 
     // Comments collection
     match /comments/{commentId} {
       allow read: if true;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid);
+      allow create, update, delete: if true;
     }
 
     // Conversations
