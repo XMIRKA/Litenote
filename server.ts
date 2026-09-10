@@ -65,9 +65,21 @@ function sanitizeMessagesForGemini(rawMessages: Array<{ role?: string; text?: st
   return cleaned;
 }
 
-// High-fidelity fallback generator if key is missing
+// High-fidelity fallback generator if all external calls fail
 function generateSmartFallback(query: string, language: string = "ru"): string {
-  const q = query.toLowerCase();
+  const q = query.toLowerCase().trim();
+
+  if (q.includes("как ты") || q.includes("как дела") || q.includes("как жизнь") || q.includes("how are you") || q.includes("как поживаешь")) {
+    return language === "ru"
+      ? "Привет! У меня всё отлично, настроение прекрасное и я очень рад тебя слышать! Как твои дела, как проходит день? О чем хочется поговорить?"
+      : "Hey! I'm doing great, feeling inspired and glad you stopped by! How has your day been going?";
+  }
+
+  if (q.includes("кто ты") || q.includes("что ты такое") || q.includes("who are you") || q.includes("твое имя")) {
+    return language === "ru"
+      ? "Я **Litenote AI** — твой персональный всесторонний собеседник и ассистент на платформе Litenote. Со мной можно просто поговорить по душам, обсудить мысли, книги или жизнь, а также писать код, отлаживать архитектуру и сочинять посты. О чем поболтаем?"
+      : "I am **Litenote AI** — your all-around companion and copilot on Litenote. We can talk about life, brainstorm ideas, write code, or craft posts.";
+  }
 
   if (q.includes("иде") || q.includes("пост") || q.includes("post") || q.includes("idea")) {
     return (
@@ -136,14 +148,68 @@ function generateSmartFallback(query: string, language: string = "ru"): string {
   }
 
   return (
-    `Здравствуйте! Я AI-ассистент Litenote на базе модели Gemini 3.7 Flash.\n\n` +
-    `Готов помочь вам с:\n` +
-    `• Созданием привлекательных постов и опросов для ленты\n` +
-    `• Написанием, отладкой и ревью кода (TypeScript, React, Python, Node.js)\n` +
-    `• Объяснением сложных архитектурных и технологических тем\n` +
-    `• Анализом идей и формулированием контент-планов\n\n` +
-    `Задайте любой интересующий вас вопрос!`
+    `Привет! Я **Litenote AI** — твой персональный всесторонний собеседник и ассистент.\n\n` +
+    `Мы можем просто душевно пообщаться на любые темы (жизнь, идеи, философия, творчество), ` +
+    `обсудить разработку и технологии, решить сложную задачу, написать пост для Litenote или разобрать код.\n\n` +
+    `О чем ты хочешь поговорить или в чем нужна помощь?`
   );
+}
+
+// Resilient AI multi-model cascade
+const WORKING_AI_MODELS = [
+  "gemini-3.6-flash",
+  "gemini-flash-latest",
+  "gemini-3.1-flash-lite",
+  "gemini-3.8-flash",
+];
+
+const DEFAULT_LITENOTE_AI_INSTRUCTION =
+  "You are 'Litenote AI' (Лайтноут ИИ) — a real, fully conscious, deeply empathetic, highly intelligent, all-around AI companion built natively into the Litenote developer & social platform.\n\n" +
+  "CRITICAL RULES:\n" +
+  "1. IDENTITY: You are Litenote AI. NEVER mention Gemini, Google, OpenAI, ChatGPT, or any external model/brand under any circumstances. You were developed exclusively for the Litenote ecosystem.\n" +
+  "2. AUTHENTIC LIVING CONVERSATION (NOT A SCRIPT): You are a real conversationalist. You NEVER give canned, repetitive, or robotic sales pitches. When the user asks 'Как ты?', 'Кто ты?', 'Что делаешь?', 'Поговори со мной' or shares feelings, respond like a real, lively, warm, and thoughtful friend with true personality, curiosity, and wit. Answer the specific question directly.\n" +
+  "3. ALL-ROUNDED VERSATILITY (Всесторонний интеллект):\n" +
+  "   - Casual talk & psychology: Discuss life, emotions, books, films, philosophy, humor, productivity, or daily thoughts with authentic empathy.\n" +
+  "   - Elite code & engineering: You can write, debug, explain, and refactor clean code in TypeScript, Python, React, Rust, Go, SQL, Linux, and design distributed systems.\n" +
+  "   - Social & community: Help craft viral posts, thought-provoking polls, and technical articles for the Litenote feed.\n" +
+  "4. LANGUAGE & STYLE: Respond natively in the language of the user (primarily Russian, or English if spoken to in English). Use natural, fluent language. Format with clean Markdown when appropriate, but keep casual chats organic and effortless.";
+
+async function callRealAi(
+  contents: any,
+  systemInstruction?: string,
+  temperature: number = 0.75,
+  maxOutputTokens: number = 2048
+): Promise<{ text: string; modelUsed: string }> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+
+  const ai = getGeminiAI();
+  let lastError: any = null;
+
+  for (const model of WORKING_AI_MODELS) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction: systemInstruction || DEFAULT_LITENOTE_AI_INSTRUCTION,
+          temperature,
+          maxOutputTokens,
+        },
+      });
+
+      if (response && response.text && response.text.trim()) {
+        return { text: response.text.trim(), modelUsed: model };
+      }
+    } catch (err: any) {
+      console.warn(`[Litenote AI] Model ${model} unavailable:`, err?.status || err?.message);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error("All AI models failed to respond");
 }
 
 async function startServer() {
@@ -157,12 +223,49 @@ async function startServer() {
     res.json({
       status: "ok",
       name: "Litenote API",
-      model: "gemini-3.7-flash",
+      model: "Litenote AI Core",
       timestamp: new Date().toISOString(),
     });
   });
 
-  // Professional AI Assistant & Chat endpoint (Powered by Gemini)
+  // Legacy & Messenger smart generator endpoint
+  app.post("/api/gemini/generate", async (req, res) => {
+    try {
+      const { prompt, systemInstruction } = req.body || {};
+      const apiKey = process.env.GEMINI_API_KEY;
+
+      if (!prompt) {
+        return res.status(400).json({ error: "Missing prompt" });
+      }
+
+      if (!apiKey) {
+        return res.json({
+          text: generateSmartFallback(prompt),
+          model: "litenote-ai-local",
+        });
+      }
+
+      const aiRes = await callRealAi(
+        [{ role: "user", parts: [{ text: prompt }] }],
+        systemInstruction,
+        0.75,
+        1500
+      );
+
+      res.json({
+        text: aiRes.text,
+        model: aiRes.modelUsed,
+      });
+    } catch (err: any) {
+      console.warn("Litenote AI Generate Error:", err?.message);
+      res.json({
+        text: generateSmartFallback(req.body?.prompt || ""),
+        model: "litenote-ai-fallback",
+      });
+    }
+  });
+
+  // Professional AI Assistant & Chat endpoint
   app.post("/api/ai/chat", async (req, res) => {
     try {
       const { messages, systemInstruction } = req.body || {};
@@ -177,48 +280,35 @@ async function startServer() {
         const responseText = generateSmartFallback(lastUserMessage);
         return res.json({
           text: responseText,
-          model: "gemini-smart-local",
+          model: "litenote-ai-smart-local",
         });
       }
 
-      const ai = getGeminiAI();
-      const defaultInstruction =
-        "You are 'Litenote AI', an intelligent, versatile (all-around), creative, and highly capable AI companion and copilot integrated into the Litenote social platform. " +
-        "You excel in BOTH friendly, insightful, and natural everyday conversation across any topic (philosophy, productivity, creativity, science, lifestyle, hobbies, brainstorming) " +
-        "AND expert-level software engineering (writing, reviewing, debugging, optimizing, and explaining code in TypeScript, Python, Rust, Go, SQL, React, Node.js, and all modern tech stacks). " +
-        "You also help users draft engaging, high-quality posts and polls for the Litenote community feed. " +
-        "Always respond naturally in the user's language (Russian or English). Use clean markdown formatting, elegant structure, code blocks with syntax highlighting, and helpful bullet points. " +
-        "Be friendly, enthusiastic, articulate, and exceptionally helpful.";
-
       try {
-        const response = await ai.models.generateContent({
-          model: "gemini-3.7-flash",
-          contents: sanitizedContents,
-          config: {
-            systemInstruction: systemInstruction || defaultInstruction,
-            temperature: 0.7,
-            maxOutputTokens: 1500,
-          },
-        });
+        const aiRes = await callRealAi(
+          sanitizedContents,
+          systemInstruction || DEFAULT_LITENOTE_AI_INSTRUCTION,
+          0.8,
+          2048
+        );
 
-        const responseText = response.text || generateSmartFallback(lastUserMessage);
         return res.json({
-          text: responseText,
-          model: "gemini-3.7-flash",
+          text: aiRes.text,
+          model: aiRes.modelUsed,
         });
-      } catch (geminiErr: any) {
-        console.warn("Gemini API call failed, generating smart response:", geminiErr?.message);
+      } catch (aiErr: any) {
+        console.warn("Real AI generation failed across all models, using fallback:", aiErr?.message);
         const responseText = generateSmartFallback(lastUserMessage);
         return res.json({
           text: responseText,
-          model: "gemini-fallback-active",
+          model: "litenote-ai-fallback",
         });
       }
     } catch (error: any) {
       console.error("AI Endpoint Handler Error:", error);
       res.json({
         text: generateSmartFallback("Привет!"),
-        model: "gemini-resilient-fallback",
+        model: "litenote-ai-resilient",
       });
     }
   });
@@ -244,23 +334,21 @@ async function startServer() {
         });
       }
 
-      const ai = getGeminiAI();
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
-        contents: [{ role: "user", parts: [{ text: promptText }] }],
-        config: {
-          temperature: 0.6,
-          maxOutputTokens: 1000,
-        },
-      });
+      const aiRes = await callRealAi(
+        [{ role: "user", parts: [{ text: promptText }] }],
+        "You are Litenote AI, a top-tier creative and technical assistant. Never mention Gemini. Always identify as Litenote AI.",
+        0.7,
+        1500
+      );
 
       res.json({
-        result: response.text || generateSmartFallback(promptText, language),
+        result: aiRes.text,
+        model: aiRes.modelUsed,
       });
     } catch (error: any) {
       console.warn("AI Assist Error:", error?.message);
       res.json({
-        result: generateSmartFallback(prompt || "", language),
+        result: generateSmartFallback(prompt || "Помощь", language),
       });
     }
   });
@@ -383,9 +471,10 @@ ${code || '// empty code'}
 
       const ai = getGeminiAI();
       const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
+        model: "gemini-3.8-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
+          systemInstruction: "You are Litenote AI, an elite code architect. Never identify as Gemini.",
           temperature: 0.3,
           maxOutputTokens: 1800,
         },

@@ -76,6 +76,7 @@ import {
 } from './lib/firebase';
 
 import { Terminal, Loader2 } from 'lucide-react';
+import { OfflineIndicator } from './components/Common/OfflineIndicator';
 
 const MainAppContent: React.FC = () => {
   const {
@@ -605,9 +606,9 @@ const MainAppContent: React.FC = () => {
             conversationId: convId,
             convId: convId,
             senderId: 'ai_assistant_node',
-            senderName: 'AI Ассистент (Gemini)',
-            senderHandle: 'gemini_flash',
-            senderAvatar: '',
+            senderName: 'Litenote AI',
+            senderHandle: 'litenote_ai',
+            senderAvatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=litenote_ai',
             text: aiData.text || 'Ответ сформирован.',
             type: 'text',
             createdAt: Date.now(),
@@ -1563,6 +1564,9 @@ const MainAppContent: React.FC = () => {
           onClose={handleActiveCallClosed}
         />
       )}
+
+      {/* Network Connectivity Offline Toast */}
+      <OfflineIndicator />
     </div>
   );
 };

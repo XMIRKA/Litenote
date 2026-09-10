@@ -253,51 +253,59 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const result = await signInWithPopup(auth, provider);
       const fbUser = result.user;
 
+      let matchedDoc: UserProfile | null = null;
       const userDocRef = doc(db, 'users', fbUser.uid);
       const userSnap = await getDoc(userDocRef);
-      if (!userSnap.exists()) {
-        const rawHandle = (fbUser.email?.split('@')[0] || 'user_' + Math.floor(1000 + Math.random() * 9000))
+
+      if (userSnap.exists()) {
+        matchedDoc = userSnap.data() as UserProfile;
+      } else if (fbUser.email) {
+        // Check if existing profile matches this email in Firestore
+        const q = query(collection(db, 'users'), where('email', '==', fbUser.email.trim().toLowerCase()));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          matchedDoc = snap.docs[0].data() as UserProfile;
+        }
+      }
+
+      if (!matchedDoc) {
+        let rawHandle = (fbUser.email?.split('@')[0] || 'user_' + Math.floor(1000 + Math.random() * 9000))
           .toLowerCase()
           .replace(/[^a-z0-9_]/g, '');
+        if (!rawHandle) rawHandle = 'dev_' + Math.floor(1000 + Math.random() * 9000);
+        const isAvailable = await checkHandleAvailable(rawHandle, fbUser.uid);
+        const finalHandle = isAvailable ? rawHandle : `${rawHandle}_${Math.floor(100 + Math.random() * 900)}`;
+
         const newProfile: UserProfile = {
           uid: fbUser.uid,
           email: fbUser.email || '',
           displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'Operator',
-          handle: rawHandle,
-          avatarUrl: fbUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${rawHandle}`,
+          handle: finalHandle,
+          avatarUrl: fbUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${finalHandle}`,
           bannerUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1000&auto=format&fit=crop&q=80',
           bio: '',
           status: 'online',
           customStatus: '',
-          accentColor: 'violet',
-          language: 'ru',
+          accentColor: (accentColor as any) || 'emerald',
+          language: language || 'ru',
           createdAt: Date.now(),
           badges: ['cyber_pioneer'],
           privacy: { profileVisibility: 'all', allowDMs: 'all', showOnlineStatus: true },
           stats: { postsCount: 0, friendsCount: 0, followersCount: 0, followingCount: 0 },
         };
         await setDoc(userDocRef, cleanFirestoreData(newProfile));
-        setUser(newProfile);
-        try {
-          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(newProfile));
-        } catch {}
-      } else {
-        const data = userSnap.data() as UserProfile;
-        setUser(data);
-        try {
-          localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(data));
-        } catch {}
+        matchedDoc = newProfile;
       }
-      attachUserDocListener(fbUser.uid);
+
+      setUser(matchedDoc);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(matchedDoc));
+      } catch {}
+
+      attachUserDocListener(matchedDoc.uid || fbUser.uid);
       setIsAuthModalOpen(false);
     } catch (err: any) {
-      if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
-        throw new Error(
-          language === 'ru'
-            ? 'Вход через Google ограничен Google на этом домене. Пожалуйста, используйте форму входа/регистрации по Email или Никнейму ниже — она работает без ограничений!'
-            : 'Google OAuth is restricted on this domain. Please use the Email/Handle sign in below — it works instantly!'
-        );
-      }
+      console.warn('Firebase Google Auth error:', err?.code, err?.message);
       throw err;
     }
   };

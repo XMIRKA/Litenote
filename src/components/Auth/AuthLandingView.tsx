@@ -160,7 +160,7 @@ export const AuthLandingView: React.FC = () => {
                 <Terminal className="w-5 h-5" />
               </div>
               <h4 className="text-sm font-bold text-white">
-                {language === 'ru' ? 'Gemini AI Core Matrix' : 'Gemini AI Core Matrix'}
+                {language === 'ru' ? 'Litenote AI Core Matrix' : 'Litenote AI Core Matrix'}
               </h4>
               <p className="text-xs text-slate-400 leading-relaxed">
                 {language === 'ru'

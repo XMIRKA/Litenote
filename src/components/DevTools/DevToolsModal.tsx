@@ -411,8 +411,8 @@ export const DevToolsModal: React.FC<DevToolsModalProps> = ({
               </div>
               <p className="text-[11px] sm:text-xs text-slate-400">
                 {language === 'ru'
-                  ? 'Интерактивная песочница, библиотека сниппетов и ИИ-ассистент Gemini'
-                  : 'Interactive sandbox, snippet library, and Gemini AI code assistant'}
+                  ? 'Интерактивная песочница, библиотека сниппетов и ИИ-ассистент Litenote AI'
+                  : 'Interactive sandbox, snippet library, and Litenote AI assistant'}
               </p>
             </div>
           </div>
@@ -692,7 +692,7 @@ export const DevToolsModal: React.FC<DevToolsModalProps> = ({
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-indigo-300 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                      <span>{language === 'ru' ? 'Запрос к ИИ (Gemini AI Assistant):' : 'AI Prompt / Instructions:'}</span>
+                      <span>{language === 'ru' ? 'Запрос к Litenote AI:' : 'Litenote AI Prompt:'}</span>
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -766,8 +766,8 @@ export const DevToolsModal: React.FC<DevToolsModalProps> = ({
                       <RefreshCw className="w-4 h-4 animate-spin text-indigo-400" />
                       <span>
                         {language === 'ru'
-                          ? 'Gemini 3.7 Flash проводит глубокий анализ кода и алгоритмов...'
-                          : 'Gemini 3.7 Flash is analyzing code logic and complexity...'}
+                          ? 'Litenote AI проводит глубокий анализ кода и алгоритмов...'
+                          : 'Litenote AI is analyzing code logic and complexity...'}
                       </span>
                     </div>
                   )}
@@ -778,7 +778,7 @@ export const DevToolsModal: React.FC<DevToolsModalProps> = ({
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-semibold text-indigo-300 flex items-center gap-1">
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                          {language === 'ru' ? 'Ответ Gemini AI' : 'Gemini AI Output'}
+                          {language === 'ru' ? 'Ответ Litenote AI' : 'Litenote AI Output'}
                         </span>
 
                         <div className="flex items-center gap-2">

@@ -6,6 +6,7 @@ import { UserProfile, ActiveTab } from '../types';
 import { CreatorBadge, VerifiedCheck } from './Common/CreatorBadge';
 import { LiteNoteLogo } from './Common/LiteNoteLogo';
 import { PillNav } from './ui/PillNav';
+import { PWAInstallButton } from './Common/PWAInstallButton';
 import { isCreatorAccount } from '../lib/creator';
 import { getCleanAvatarUrl } from '../lib/avatar';
 import {
@@ -268,6 +269,9 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
         )}
+
+        {/* PWA Install Button */}
+        <PWAInstallButton variant="header" />
 
         {/* Quick Settings Direct Icon for Mobile & Desktop */}
         {user && (

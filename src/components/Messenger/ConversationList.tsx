@@ -86,7 +86,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   };
 
   const getConvTitle = (conv: Conversation) => {
-    if (conv.type === 'ai_bot') return 'AI Core (Gemini)';
+    if (conv.type === 'ai_bot') return 'Litenote AI';
     if (conv.name) return conv.name;
     if (!user) return 'Диалог';
 

@@ -88,12 +88,12 @@ export const MessengerView: React.FC<MessengerViewProps> = ({
   const defaultAiConv: Conversation = {
     id: user ? `conv_ai_${user.uid}` : 'conv_ai_default',
     type: 'ai_bot',
-    name: 'AI Ассистент (Gemini)',
+    name: 'Litenote AI',
     participants: [user?.uid || 'guest', 'ai_assistant_node'],
     participantDetails: {
       ai_assistant_node: {
-        displayName: 'AI Ассистент (Gemini)',
-        handle: 'gemini_flash',
+        displayName: 'Litenote AI',
+        handle: 'litenote_ai',
         avatarUrl: '',
         status: 'online',
       },

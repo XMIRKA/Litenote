@@ -1,12 +1,12 @@
 {
-  "projectId": "subtle-joy-b0phn",
-  "appId": "1:123652998452:web:5cee26d002c8064fa1d161",
-  "apiKey": "AIzaSyBX2WS8u3hCMpw_xsH1fyujM53fR4gRtuA",
-  "authDomain": "subtle-joy-b0phn.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-3b137730-474b-4f63-a728-1de1950d5425",
-  "storageBucket": "subtle-joy-b0phn.firebasestorage.app",
-  "messagingSenderId": "123652998452",
-  "measurementId": "",
-  "oAuthClientId": "123652998452-chn7bald9784d6o5v9k0q7unvrfqp40d.apps.googleusercontent.com",
+  "projectId": "litenote-dc1ca",
+  "appId": "1:767822390244:web:5fae4a611a495f85d21df1",
+  "apiKey": "AIzaSyCU-Wqap6bLGi1by1qYo8BiRlRGZBJG5H0",
+  "authDomain": "litenote-dc1ca.firebaseapp.com",
+  "firestoreDatabaseId": "default",
+  "storageBucket": "litenote-dc1ca.firebasestorage.app",
+  "messagingSenderId": "767822390244",
+  "measurementId": "G-Y15YN0GNF9",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }

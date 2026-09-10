@@ -89,20 +89,20 @@ export const AIChat5: React.FC<AIChat5Props> = ({
         sender: 'assistant',
         content:
           language === 'ru'
-            ? `Привет! Я **Litenote AI** — твой всесторонний ИИ-ассистент на базе **Gemini 3.7 Flash**.\n\n` +
-              `Я умею всё:\n` +
-              `• 💬 **Общаться на любые темы** — от повседневных бесед и философии до брейншторминга и аналитики\n` +
-              `• ⚡ **Писать, отлаживать и оптимизировать код** (TypeScript, Python, Rust, React, SQL и др.)\n` +
-              `• 💡 **Создавать вовлекающие посты** для ленты Litenote и генерировать опросы\n` +
-              `• 🛡️ **Выполнять действия в песочнице с безопасным подтверждением** (Inline Action Approval)\n\n` +
-              `Чем займемся сегодня? Задай любой вопрос или выбери быструю тему ниже!`
-            : `Hello! I am **Litenote AI** — your versatile all-around assistant powered by **Gemini 3.7 Flash**.\n\n` +
-              `Here is what I can do:\n` +
-              `• 💬 **Converse freely on any topic** — from general talk and philosophy to product strategy\n` +
-              `• ⚡ **Write, debug, and review code** (TypeScript, Python, Rust, React, SQL, etc.)\n` +
-              `• 💡 **Draft viral posts & polls** directly for the Litenote feed\n` +
-              `• 🛡️ **Execute agent sandbox operations with inline approval requests**\n\n` +
-              `How can I assist you today?`,
+            ? `Привет! Я **Litenote AI** — твой персональный всесторонний собеседник и умный ассистент.\n\n` +
+              `Я с удовольствием пообщаюсь с тобой на любые темы и помогу в самых разных задачах:\n` +
+              `• 💬 **Живой разговор обо всём** — повседневные темы, психология, идеи, книги, наука, творчество и юмор\n` +
+              `• ⚡ **Разработка и код** — написание, отладка, ревью и оптимизация (TypeScript, Python, React, Rust, SQL)\n` +
+              `• 💡 **Создание контента** — яркие публикации, опросы и идеи для ленты Litenote\n` +
+              `• 🛡️ **Безопасные действия** — интерактивное подтверждение операций (Inline Action Approval Gate)\n\n` +
+              `О чём хочешь поговорить или что мы сегодня сделаем?`
+            : `Hello! I am **Litenote AI** — your versatile all-around conversational companion and intelligent copilot.\n\n` +
+              `I can help you with anything:\n` +
+              `• 💬 **Engaging everyday conversation** — philosophy, life, science, creativity, ideas, and humor\n` +
+              `• ⚡ **Code & Engineering** — write, debug, and review code (TypeScript, Python, React, Rust, SQL)\n` +
+              `• 💡 **Drafting content** — captivating posts and interactive polls for the Litenote community feed\n` +
+              `• 🛡️ **Gated sandbox actions** — secure operations with inline approval requests\n\n` +
+              `What would you like to explore or discuss today?`,
         timestamp: Date.now(),
       },
     ];
@@ -491,7 +491,7 @@ export const AIChat5: React.FC<AIChat5Props> = ({
                 <span>Litenote AI</span>
               </h3>
               <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-mono text-emerald-300 font-bold">
-                Gemini 3.7 Flash
+                Litenote Neural Core
               </span>
               <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-[10px] font-mono text-cyan-300 font-bold">
                 AI Chat 5 Action Gate
@@ -684,7 +684,7 @@ export const AIChat5: React.FC<AIChat5Props> = ({
                           )}
                         </div>
 
-                        <span className="text-[10px] font-mono text-slate-500">Gemini 3.7 Flash</span>
+                        <span className="text-[10px] font-mono text-slate-500">Litenote AI</span>
                       </div>
                     )}
                   </div>

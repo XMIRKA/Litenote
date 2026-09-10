@@ -37,7 +37,7 @@ export const translations = {
     selectLanguage: 'Language',
     addTags: 'Tags (e.g. rust, cybersec, ai)',
     aiGenerateAssist: 'AI Prompt Assistant',
-    aiDrafting: 'Generating via Gemini 3.1 Flash Lite...',
+    aiDrafting: 'Generating via Litenote AI...',
     publishRecord: 'Transmit Record',
     cancel: 'Cancel',
     pinnedPost: 'PINNED RECORD',
@@ -108,7 +108,7 @@ export const translations = {
 
     // Litenote AI Assistant
     terminalTitle: 'Litenote AI Assistant',
-    terminalSub: 'Versatile conversational copilot powered by Gemini 3.7 Flash',
+    terminalSub: 'Versatile, all-around conversational & coding copilot',
     clearTerminal: 'Clear History',
     terminalPlaceholder: 'Ask anything: free talk, code debugging, social posts, architecture, or gated actions...',
     terminalWelcome: 'LITENOTE AI INITIALIZED. Ready for prompt execution and gated actions.',
@@ -185,7 +185,7 @@ export const translations = {
     selectLanguage: 'Язык программирования',
     addTags: 'Теги (например, rust, cybersec, ai)',
     aiGenerateAssist: 'ИИ-Помощник публикаций',
-    aiDrafting: 'Генерация через Gemini 3.1 Flash Lite...',
+    aiDrafting: 'Генерация через Litenote AI...',
     publishRecord: 'Передать запись',
     cancel: 'Отмена',
     pinnedPost: 'ЗАКРЕПЛЁННАЯ ЗАПИСЬ',
@@ -256,7 +256,7 @@ export const translations = {
 
     // Litenote AI Assistant
     terminalTitle: 'Litenote AI Ассистент',
-    terminalSub: 'Всесторонний ИИ-помощник на базе Gemini 3.7 Flash',
+    terminalSub: 'Всесторонний ИИ-собеседник и экспертный помощник',
     clearTerminal: 'Очистить историю',
     terminalPlaceholder: 'Задайте любой вопрос: свободный диалог, код, идеи постов, действия с подтверждением...',
     terminalWelcome: 'LITENOTE AI ИНИЦИАЛИЗИРОВАН. Готов к выполнению запросов и безопасных действий.',

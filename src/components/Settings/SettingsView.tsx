@@ -4,6 +4,7 @@ import { translations } from '../../lib/i18n';
 import { THEME_CONFIGS } from '../../lib/theme';
 import { AccentColor, Language, Post, UserProfile, Conversation } from '../../types';
 import { ModerationPanelModal } from './ModerationPanelModal';
+import { PWAInstallButton } from '../Common/PWAInstallButton';
 import {
   Settings,
   Globe,
@@ -235,6 +236,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           })}
         </div>
       </div>
+
+      {/* PWA / Native App Installation Card */}
+      <PWAInstallButton variant="settings" />
 
       {/* 4. Privacy & Messages */}
       <div className="p-5 rounded-2xl bg-[#0F172A] border border-[#1E293B] space-y-4">

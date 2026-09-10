@@ -78,7 +78,7 @@ export const CyberNetworkBackground: React.FC<CyberNetworkBackgroundProps> = ({
       'matrix.root.net',
       'TCP/WASM',
       'LITENOTE_CORE',
-      'AI_GEMINI_NODE',
+      'AI_LITENOTE_NODE',
       'TLS_v1.3',
       'KERNEL_SYS',
       'SYN_ACK',

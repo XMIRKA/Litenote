@@ -195,12 +195,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const chatTitle =
     conversation.type === 'ai_bot'
-      ? 'AI Ассистент (Gemini)'
+      ? 'Litenote AI'
       : conversation.name || liveOther?.displayName || 'Чат';
 
   const chatSubtitle =
     conversation.type === 'ai_bot'
-      ? 'Gemini 3.7 Flash Engine'
+      ? (language === 'ru' ? 'Всесторонний собеседник • Онлайн' : 'All-around Companion • Online')
       : liveOther
       ? `@${liveOther.handle} • ${
           liveOther.status === 'online'
@@ -743,7 +743,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-xs text-indigo-300 w-fit animate-in fade-in shadow-md">
             <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
             <span className="font-medium">
-              {language === 'ru' ? 'AI формирует ответ...' : 'Gemini AI is responding...'}
+              {language === 'ru' ? 'Litenote AI печатает...' : 'Litenote AI is typing...'}
             </span>
           </div>
         )}
@@ -781,8 +781,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       ) : (
         <ChatInput
-          onSendMessage={(text, replyTo) => {
-            onSendMessage(text, replyTo);
+          onSendMessage={async (text, replyTo) => {
+            if (conversation.type === 'ai_bot') {
+              setIsAiThinking(true);
+            }
+            try {
+              await onSendMessage(text, replyTo);
+            } finally {
+              setIsAiThinking(false);
+            }
             setReplyingTo(null);
           }}
           onStartVoice={() => setIsRecordingVoice(true)}

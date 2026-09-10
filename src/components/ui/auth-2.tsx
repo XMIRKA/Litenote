@@ -17,6 +17,7 @@ import {
   EyeOff,
   Loader2,
   CheckCircle2,
+  AlertCircle,
   Star,
   Sparkles,
   ShieldCheck,
@@ -27,7 +28,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowRight,
-  Check
+  Check,
+  ExternalLink,
+  Copy
 } from 'lucide-react';
 
 interface Auth2Props {
@@ -50,6 +53,7 @@ export const Auth2: React.FC<Auth2Props> = ({
     signInWithEmail,
     signUpWithEmail,
     resetPassword,
+    signInWithGoogle,
   } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>(initialMode);
@@ -64,12 +68,124 @@ export const Auth2: React.FC<Auth2Props> = ({
   const [resetSentEmail, setResetSentEmail] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  interface GoogleDiagnostic {
+    type: 'domain' | 'provider_disabled' | 'popup_closed' | 'popup_blocked' | 'other';
+    title: string;
+    description: string;
+    errorCode?: string;
+    errorMessage?: string;
+    domains?: string[];
+    suggestNewTab?: boolean;
+  }
+  const [googleDiagnostic, setGoogleDiagnostic] = useState<GoogleDiagnostic | null>(null);
+  const [copiedDomainIdx, setCopiedDomainIdx] = useState<number | null>(null);
   const [activeTestimonialIdx, setActiveTestimonialIdx] = useState(0);
+
+  const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
 
   const handleResetPassword = () => {
     setMode('reset');
     setErrorMsg(null);
+    setGoogleDiagnostic(null);
     setResetSentEmail(null);
+  };
+
+  const handleGoogleAuth = async () => {
+    setIsGoogleLoading(true);
+    setErrorMsg(null);
+    setGoogleDiagnostic(null);
+    try {
+      await signInWithGoogle();
+      if (onSuccess) onSuccess();
+    } catch (err: any) {
+      console.warn('Google Auth exception caught:', err?.code, err?.message);
+      const errCode = err?.code || '';
+      const errMsg = err?.message || '';
+
+      const isDomainIssue =
+        errCode === 'auth/unauthorized-domain' ||
+        errMsg.toLowerCase().includes('unauthorized-domain') ||
+        errMsg.toLowerCase().includes('unauthorized domain') ||
+        errMsg.includes('ограничен Google на этом домене');
+
+      const isProviderDisabled =
+        errCode === 'auth/operation-not-allowed' ||
+        errMsg.toLowerCase().includes('operation-not-allowed') ||
+        errMsg.toLowerCase().includes('identity provider configuration') ||
+        errMsg.toLowerCase().includes('provider is not enabled');
+
+      const isPopupClosed =
+        errCode === 'auth/popup-closed-by-user' ||
+        errCode === 'auth/cancelled-popup-request';
+
+      const isPopupBlocked = errCode === 'auth/popup-blocked';
+
+      if (isProviderDisabled) {
+        setGoogleDiagnostic({
+          type: 'provider_disabled',
+          title: language === 'ru' ? 'Провайдер Google не включен в Firebase Console' : 'Google Auth is disabled in Firebase',
+          description: language === 'ru'
+            ? 'В проекте Firebase (litenote-dc1ca) вход через Google отключен по умолчанию. Чтобы его включить: 1) В Firebase Console перейдите в Authentication → вкладка «Sign-in method». 2) Нажмите на «Google» в списке провайдеров, включите тумблер «Enable», выберите email поддержки проекта и нажмите «Save».'
+            : 'Google provider is disabled in Firebase Console. Go to Authentication → Sign-in method → Google, toggle Enable, set project support email and click Save.',
+          errorCode: errCode,
+          errorMessage: errMsg,
+        });
+      } else if (isDomainIssue) {
+        const currentHost = window.location.hostname || window.location.host;
+        const hosts = Array.from(new Set([
+          currentHost,
+          'ais-dev-xcpecwjouq7heproeidavo-138388183966.asia-southeast1.run.app',
+          'ais-pre-xcpecwjouq7heproeidavo-138388183966.asia-southeast1.run.app'
+        ])).filter(Boolean);
+
+        setGoogleDiagnostic({
+          type: 'domain',
+          title: language === 'ru' ? 'Домен ещё не подтверждён в Firebase' : 'Domain not authorized in Firebase',
+          description: language === 'ru'
+            ? 'В Firebase Console → Authentication → Settings → «Authorized domains» добавьте эти адреса (БЕЗ https://). Обратите внимание: после добавления Google обновляет кэш 1-2 минуты.'
+            : 'In Firebase Console → Authentication → Settings → Authorized domains, add these addresses without https://. Note: Google servers take 1-2 minutes to refresh domain cache.',
+          domains: hosts,
+          errorCode: errCode,
+          errorMessage: errMsg,
+        });
+      } else if (isPopupClosed) {
+        setGoogleDiagnostic({
+          type: 'popup_closed',
+          title: language === 'ru' ? 'Окно авторизации Google закрылось' : 'Google sign-in popup was closed',
+          description: language === 'ru'
+            ? (isInIframe
+              ? 'Вы находитесь во встроенном фрейме предпросмотра. Браузеры (Chrome/Safari) блокируют передачу токена Google между окном и фреймом из-за защиты cookies. Откройте приложение в отдельной вкладке — там вход сработает напрямую!'
+              : 'Окно авторизации Google было закрыто до подтверждения входа.')
+            : 'Popup was closed. If inside an iframe, open the app in a new tab for direct Google authentication.',
+          errorCode: errCode,
+          errorMessage: errMsg,
+          suggestNewTab: true,
+        });
+      } else if (isPopupBlocked) {
+        setGoogleDiagnostic({
+          type: 'popup_blocked',
+          title: language === 'ru' ? 'Всплывающее окно заблокировано' : 'Popup blocked by browser',
+          description: language === 'ru'
+            ? 'Браузер заблокировал всплывающее окно. Разрешите всплывающие окна или откройте сайт в отдельной вкладке.'
+            : 'Please allow popups in your browser or open the app in a new tab.',
+          errorCode: errCode,
+          errorMessage: errMsg,
+          suggestNewTab: true,
+        });
+      } else {
+        setGoogleDiagnostic({
+          type: 'other',
+          title: language === 'ru' ? 'Ошибка входа через Google' : 'Google sign-in error',
+          description: errMsg || (language === 'ru' ? 'Не удалось выполнить вход через Google' : 'Google sign-in failed'),
+          errorCode: errCode,
+          errorMessage: errMsg,
+          suggestNewTab: isInIframe,
+        });
+      }
+    } finally {
+      setIsGoogleLoading(false);
+    }
   };
 
   const platformModules = [
@@ -92,13 +208,13 @@ export const Auth2: React.FC<Auth2Props> = ({
       tech: "Sandboxed Execution"
     },
     {
-      titleRu: "Интеллектуальное ядро Gemini AI",
-      titleEn: "Gemini AI Intelligence Core",
-      descRu: "Встроенный ассистент для объяснения кода, рефакторинга, генерации решений и многоязычного перевода публикаций.",
-      descEn: "Built-in intelligence for code analysis, instant debugging, architecture reviews, and multi-language post translation.",
-      badge: "Gemini Neural Core",
+      titleRu: "Интеллектуальное ядро Litenote AI",
+      titleEn: "Litenote AI Intelligence Core",
+      descRu: "Встроенный всесторонний собеседник и ассистент для диалогов, объяснения кода, рефакторинга и генерации публикаций.",
+      descEn: "Built-in all-around intelligence for deep conversation, code analysis, instant debugging, and creative drafting.",
+      badge: "Litenote Neural Core",
       icon: "Sparkles",
-      tech: "AI Copilot"
+      tech: "AI Companion"
     },
     {
       titleRu: "Мультимедиа и P2P коммуникации",
@@ -217,8 +333,8 @@ export const Auth2: React.FC<Auth2Props> = ({
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 mt-2 leading-relaxed max-w-md">
               {language === 'ru'
-                ? 'Мгновенный запуск кода в песочнице, Gemini AI ядро, голосовые хабы и сверхбыстрый обмен знаниями.'
-                : 'Zero-friction live code REPL, Gemini AI reasoning hub, ultra-fast peer chat, and real-time audio rooms.'}
+                ? 'Мгновенный запуск кода в песочнице, Litenote AI ядро, голосовые хабы и сверхбыстрый обмен знаниями.'
+                : 'Zero-friction live code REPL, Litenote AI reasoning hub, ultra-fast peer chat, and real-time audio rooms.'}
             </p>
           </div>
         </div>
@@ -246,7 +362,7 @@ export const Auth2: React.FC<Auth2Props> = ({
           <div className="p-3 rounded-2xl bg-[#08111D]/90 border border-[#182A40] backdrop-blur-md">
             <div className="text-teal-400 font-mono font-bold text-xs sm:text-sm flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-              <span>Gemini AI</span>
+              <span>Litenote AI</span>
             </div>
             <div className="text-[10px] text-slate-400 font-medium mt-0.5">
               {language === 'ru' ? 'Нейроассистент' : 'Neural Copilot'}
@@ -342,6 +458,7 @@ export const Auth2: React.FC<Auth2Props> = ({
                   onClick={() => {
                     setMode('signin');
                     setErrorMsg(null);
+                    setGoogleDiagnostic(null);
                   }}
                   style={
                     mode === 'signin'
@@ -365,6 +482,7 @@ export const Auth2: React.FC<Auth2Props> = ({
                   onClick={() => {
                     setMode('signup');
                     setErrorMsg(null);
+                    setGoogleDiagnostic(null);
                   }}
                   style={
                     mode === 'signup'
@@ -426,6 +544,159 @@ export const Auth2: React.FC<Auth2Props> = ({
                 </p>
               </div>
             </motion.div>
+          )}
+
+          {/* Google One-Click Auth / Registration */}
+          {mode !== 'reset' && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                id="google-auth-btn"
+                onClick={handleGoogleAuth}
+                disabled={isLoading || isGoogleLoading}
+                className="w-full py-2.5 px-4 rounded-full bg-[#0D1626] hover:bg-[#122238] border border-[#1E3352] hover:border-emerald-500/50 text-white font-medium text-xs sm:text-sm transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-md hover:shadow-lg disabled:opacity-50 active:scale-[0.99] group"
+              >
+                {isGoogleLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                    <span className="group-hover:text-emerald-300 transition-colors">
+                      {mode === 'signup'
+                        ? (language === 'ru' ? 'Зарегистрироваться через Google' : 'Sign up with Google')
+                        : (language === 'ru' ? 'Войти через Google' : 'Sign in with Google')}
+                    </span>
+                  </>
+                )}
+              </button>
+
+              {/* In-iframe subtle hint */}
+              {isInIframe && !googleDiagnostic && (
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-sky-950/30 border border-sky-500/20 text-[11px] text-sky-300">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                    <span>{language === 'ru' ? 'В окне предпросмотра?' : 'Inside preview iframe?'}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => window.open(window.location.href, '_blank')}
+                    className="underline hover:text-sky-100 font-semibold flex items-center gap-1 shrink-0 ml-2 cursor-pointer transition-colors"
+                  >
+                    <span>{language === 'ru' ? 'Открыть в новой вкладке' : 'Open in new tab'}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
+              {/* Google Auth Diagnostic Panel */}
+              {googleDiagnostic && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`p-3.5 rounded-2xl border text-xs space-y-2.5 text-left ${
+                    googleDiagnostic.type === 'domain' || googleDiagnostic.type === 'provider_disabled'
+                      ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                      : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                  }`}
+                >
+                  <div className="flex items-start gap-2 font-semibold">
+                    <AlertCircle className={`w-4 h-4 shrink-0 mt-0.5 ${
+                      googleDiagnostic.type === 'domain' || googleDiagnostic.type === 'provider_disabled'
+                        ? 'text-amber-400'
+                        : 'text-rose-400'
+                    }`} />
+                    <span className="text-sm font-sans">{googleDiagnostic.title}</span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-300 leading-relaxed whitespace-pre-line">
+                    {googleDiagnostic.description}
+                  </p>
+
+                  {googleDiagnostic.domains && googleDiagnostic.domains.length > 0 && (
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                        {language === 'ru' ? 'Адреса для добавления в Firebase:' : 'Domains to add in Firebase:'}
+                      </span>
+                      {googleDiagnostic.domains.map((dom, idx) => (
+                        <div
+                          key={dom}
+                          className="flex items-center justify-between gap-2 p-1.5 px-2.5 rounded-lg bg-black/60 border border-slate-700/60 font-mono text-[11px] text-slate-200 select-all"
+                        >
+                          <span className="truncate">{dom}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (navigator?.clipboard) {
+                                navigator.clipboard.writeText(dom);
+                                setCopiedDomainIdx(idx);
+                                setTimeout(() => setCopiedDomainIdx(null), 2000);
+                              }
+                            }}
+                            className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-sans font-semibold shrink-0 transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            {copiedDomainIdx === idx ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-400" />
+                                <span>{language === 'ru' ? 'Скопировано' : 'Copied'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>{language === 'ru' ? 'Копировать' : 'Copy'}</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {googleDiagnostic.suggestNewTab && (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => window.open(window.location.href, '_blank')}
+                        className="w-full py-2 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-all hover:shadow-lg active:scale-[0.99]"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>{language === 'ru' ? 'Открыть сайт в отдельной вкладке и войти' : 'Open in new tab and sign in'}</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {googleDiagnostic.errorCode && (
+                    <div className="pt-1 text-[10px] font-mono text-slate-400 opacity-70">
+                      code: {googleDiagnostic.errorCode}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              <div className="relative flex items-center justify-center my-1">
+                <div className="border-t border-[#142338] w-full" />
+                <span className="bg-[#080D18] px-3 text-[11px] font-mono text-slate-500 uppercase tracking-wider shrink-0">
+                  {language === 'ru' ? 'или по email / никнейму' : 'or with email / handle'}
+                </span>
+                <div className="border-t border-[#142338] w-full" />
+              </div>
+            </div>
           )}
 
           {/* ---------------- PRIMARY AUTH FORM (EMAIL / NICKNAME) ---------------- */}

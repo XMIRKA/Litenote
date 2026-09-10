@@ -235,14 +235,14 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-xs text-white group-hover:text-indigo-400 transition-colors">
-                      AI Ассистент (Gemini Flash)
+                      Litenote AI
                     </span>
-                    <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                      AI BOT
+                    <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      AI COMPANION
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-400 truncate">
-                    {language === 'ru' ? 'Всегда в сети • Генерация кода, ответы на любые вопросы' : 'Always online • Fast answers & coding'}
+                    {language === 'ru' ? 'Всегда в сети • Живое общение, идеи и код' : 'Always online • Conversational & Coding Copilot'}
                   </p>
                 </div>
               </div>
