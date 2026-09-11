@@ -4,7 +4,6 @@ import { translations } from '../lib/i18n';
 import { THEME_CONFIGS } from '../lib/theme';
 import { ActiveTab } from '../types';
 import { CreatorBadge, VerifiedCheck } from './Common/CreatorBadge';
-import { PWAInstallButton } from './Common/PWAInstallButton';
 import { isCreatorAccount } from '../lib/creator';
 import { getCleanAvatarUrl } from '../lib/avatar';
 import {
@@ -160,11 +159,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
               );
             })}
           </nav>
-
-          {/* Desktop In-App PWA Install Banner */}
-          <div className="pt-2">
-            <PWAInstallButton variant="sidebar" />
-          </div>
         </div>
 
         {/* User Profile Footer (Pill Card) */}

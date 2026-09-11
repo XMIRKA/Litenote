@@ -190,7 +190,7 @@ async function callRealAi(
 
   for (const model of WORKING_AI_MODELS) {
     try {
-      const response = await ai.models.generateContent({
+      const generatePromise = ai.models.generateContent({
         model,
         contents,
         config: {
@@ -199,6 +199,12 @@ async function callRealAi(
           maxOutputTokens,
         },
       });
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Timeout requesting model ${model}`)), 6500)
+      );
+
+      const response: any = await Promise.race([generatePromise, timeoutPromise]);
 
       if (response && response.text && response.text.trim()) {
         return { text: response.text.trim(), modelUsed: model };
