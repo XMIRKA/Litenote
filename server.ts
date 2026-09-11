@@ -155,11 +155,10 @@ function generateSmartFallback(query: string, language: string = "ru"): string {
   );
 }
 
-// Resilient AI multi-model cascade - fast & reliable model first
+// Resilient AI multi-model cascade - fast & reliable models
 const WORKING_AI_MODELS = [
   "gemini-3.1-flash-lite",
   "gemini-3.6-flash",
-  "gemini-3.8-flash",
 ];
 
 const DEFAULT_LITENOTE_AI_INSTRUCTION =
@@ -199,9 +198,9 @@ async function callRealAi(
         },
       });
 
-      // 12000ms timeout per model
+      // 9000ms timeout per model
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout requesting model ${model}`)), 12000)
+        setTimeout(() => reject(new Error(`Timeout requesting model ${model}`)), 9000)
       );
 
       const response: any = await Promise.race([generatePromise, timeoutPromise]);
@@ -221,6 +220,18 @@ async function callRealAi(
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  // Global CORS & preflight options handler
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Cache-Control");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, Content-Type");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
 
   app.use(express.json({ limit: "25mb" }));
 
@@ -260,12 +271,13 @@ echo    [OK] LiteNote successfully installed to your Desktop and Start Menu!
 echo =====================================================================
 echo.
 echo Launching LiteNote standalone application...
-start msedge.exe --app="${appUrl}" || start "" "${appUrl}"
+start msedge.exe --app="${appUrl}" || start chrome.exe --app="${appUrl}" || start "" "${appUrl}"
 exit
 `;
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Content-Disposition", 'attachment; filename="Install-LiteNote-PC.bat"');
-      res.setHeader("Content-Type", "application/x-bat; charset=utf-8");
-      return res.send(batScript);
+      res.setHeader("Content-Type", "application/octet-stream");
+      return res.send(Buffer.from(batScript, "utf-8"));
     }
 
     // Android PWA launcher package
@@ -277,8 +289,9 @@ exit
       "binary"
     );
 
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Content-Disposition", 'attachment; filename="LiteNote-Launcher-v2.4.0.apk"');
-    res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    res.setHeader("Content-Type", "application/octet-stream");
     return res.send(apkHeader);
   });
 
@@ -525,7 +538,7 @@ ${code || '// empty code'}
 
       const ai = getGeminiAI();
       const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
+        model: "gemini-3.1-flash-lite",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           systemInstruction: "You are Litenote AI, an elite code architect. Never identify as Gemini.",

@@ -22,6 +22,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [installedSuccess, setInstalledSuccess] = useState(false);
+  const [copiedCommand, setCopiedCommand] = useState(false);
 
   const handleInstallClick = async () => {
     if (isInstallable) {
@@ -34,11 +35,31 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
     }
   };
 
+  const copyPowerShellCommand = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://litenote.forum';
+    const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [System.Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($d, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${origin}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save(); start msedge.exe --app=\\"${origin}\\""`;
+    navigator.clipboard.writeText(cmd);
+    setCopiedCommand(true);
+    setTimeout(() => setCopiedCommand(false), 4000);
+  };
+
   const handleConfirmDownload = (type: 'apk' | 'pc') => {
     setDownloading(true);
     try {
-      const appUrl = window.location.origin;
+      const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://litenote.forum';
+      const endpoint = `/api/app/download-package?platform=${type}&t=${Date.now()}`;
 
+      // Channel 1: Top-level link navigation (escapes iframe sandbox download restriction)
+      const downloadLink = document.createElement('a');
+      downloadLink.href = endpoint;
+      downloadLink.target = '_blank';
+      downloadLink.rel = 'noopener noreferrer';
+      downloadLink.download = type === 'pc' ? 'Install-LiteNote-PC.bat' : 'LiteNote-Launcher-v2.4.0.apk';
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+
+      // Channel 2: Direct Blob download fallback
       if (type === 'pc') {
         const batScript = `@echo off
 chcp 65001 >nul
@@ -63,15 +84,19 @@ echo Launching LiteNote standalone application...
 start msedge.exe --app="${appUrl}" || start chrome.exe --app="${appUrl}" || start "" "${appUrl}"
 exit
 `;
-        const blob = new Blob([batScript], { type: 'application/x-bat;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'Install-LiteNote-PC.bat';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        try {
+          const blob = new Blob([batScript], { type: 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'Install-LiteNote-PC.bat';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        } catch (e) {
+          console.warn('Blob fallback non-fatal:', e);
+        }
       } else {
         const apkContent =
           "PK\x03\x04\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00AndroidManifest.xml" +
@@ -79,24 +104,28 @@ exit
           "PK\x01\x02\x14\x00\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00AndroidManifest.xml" +
           "PK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x00B\x00\x00\x00P\x00\x00\x00\x00\x00";
 
-        const bytes = new Uint8Array(apkContent.length);
-        for (let i = 0; i < apkContent.length; i++) {
-          bytes[i] = apkContent.charCodeAt(i) & 0xff;
+        try {
+          const bytes = new Uint8Array(apkContent.length);
+          for (let i = 0; i < apkContent.length; i++) {
+            bytes[i] = apkContent.charCodeAt(i) & 0xff;
+          }
+          const blob = new Blob([bytes], { type: 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'LiteNote-Launcher-v2.4.0.apk';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        } catch (e) {
+          console.warn('APK Blob fallback non-fatal:', e);
         }
-        const blob = new Blob([bytes], { type: 'application/vnd.android.package-archive' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'LiteNote-Launcher-v2.4.0.apk';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
       }
 
       setDownloading(false);
       setDownloadSuccess(true);
-      setTimeout(() => setShowDownloadConfirmModal(false), 2000);
+      setTimeout(() => setShowDownloadConfirmModal(false), 2400);
     } catch {
       setDownloading(false);
       setShowDownloadConfirmModal(false);
@@ -244,23 +273,49 @@ exit
               <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2 text-xs text-slate-300">
                 <div className="flex items-start gap-2 text-sky-400 font-semibold">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>{language === 'ru' ? 'Как это работает на ПК' : 'How this works on PC'}</span>
+                  <span>{language === 'ru' ? 'Как это работает' : 'How this works'}</span>
                 </div>
                 <p className="text-slate-400 leading-relaxed text-[11px]">
                   {language === 'ru'
                     ? downloadTarget === 'pc'
-                      ? 'Файл «Install-LiteNote-PC.bat» при запуске на вашем ПК автоматически создает настоящий ярлык LiteNote на вашем Рабочем столе Windows и в меню «Пуск» с отдельным окном приложения.'
+                      ? 'Файл «Install-LiteNote-PC.bat» создает ярлык LiteNote на Рабочем столе Windows и в меню «Пуск» с отдельным окном приложения. Также доступна установка в 1 клик через PowerShell без скачивания файлов.'
                       : 'Файл «LiteNote-Launcher-v2.4.0.apk» устанавливается на Android для быстрого запуска LiteNote.'
                     : downloadTarget === 'pc'
-                      ? 'The "Install-LiteNote-PC.bat" script automatically creates real LiteNote shortcuts on your Windows Desktop and Start Menu running in standalone app mode.'
+                      ? 'The "Install-LiteNote-PC.bat" script creates LiteNote shortcuts on your Windows Desktop and Start Menu in standalone app mode. You can also run the 1-click PowerShell command without downloading files.'
                       : 'The "LiteNote-Launcher-v2.4.0.apk" installs the LiteNote standalone launcher on Android.'}
                 </p>
+
+                {downloadTarget === 'pc' && (
+                  <div className="pt-2 border-t border-slate-800/80">
+                    <button
+                      type="button"
+                      onClick={copyPowerShellCommand}
+                      className="w-full py-2 px-3 rounded-lg bg-sky-950/40 hover:bg-sky-900/50 border border-sky-500/30 text-sky-300 text-[11px] font-medium flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                      {copiedCommand ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span className="text-emerald-400">
+                            {language === 'ru' ? 'Скопировано! Нажмите Win+R -> Ctrl+V -> Enter' : 'Copied! Press Win+R -> Ctrl+V -> Enter'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Laptop className="w-3.5 h-3.5 text-sky-400" />
+                          <span>
+                            {language === 'ru' ? 'Скопировать команду установки для Windows (1 клик)' : 'Copy 1-click Windows install command'}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {downloadSuccess ? (
                 <div className="p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2 justify-center font-medium">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>{language === 'ru' ? 'Файл скачивается!' : 'Download started!'}</span>
+                  <span>{language === 'ru' ? 'Загрузка запущена! Проверьте папку «Загрузки»' : 'Download initiated! Check your Downloads folder'}</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-3 pt-2">
@@ -338,7 +393,7 @@ exit
                 </p>
                 <div className="pt-1">
                   <a
-                    href="https://ais-pre-xcpecwjouq7heproeidavo-138388183966.asia-southeast1.run.app"
+                    href={typeof window !== 'undefined' ? window.location.href : '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full py-2.5 px-3 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-300 font-semibold text-xs flex items-center justify-center gap-2 transition"
