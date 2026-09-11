@@ -200,8 +200,9 @@ async function callRealAi(
         },
       });
 
+      // 4500ms timeout per model to quickly cascade if slow/frozen
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout requesting model ${model}`)), 6500)
+        setTimeout(() => reject(new Error(`Timeout requesting model ${model}`)), 4500)
       );
 
       const response: any = await Promise.race([generatePromise, timeoutPromise]);
@@ -232,6 +233,24 @@ async function startServer() {
       model: "Litenote AI Core",
       timestamp: new Date().toISOString(),
     });
+  });
+
+  // Direct Application Package / APK installer wrapper download
+  app.get("/api/app/download-package", (_req, res) => {
+    const manifestInfo = {
+      appName: "LiteNote",
+      version: "2.4.0",
+      type: "application/vnd.android.package-archive",
+      package: "org.litenote.app",
+      description: "LiteNote Progressive Web App Android Standalone Launcher",
+      downloadUrl: "https://litenote.forum",
+      offlineSupport: true,
+      timestamp: new Date().toISOString(),
+    };
+
+    res.setHeader("Content-Disposition", 'attachment; filename="LiteNote-App-v2.4.0.apk.json"');
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.send(JSON.stringify(manifestInfo, null, 2));
   });
 
   // Legacy & Messenger smart generator endpoint
