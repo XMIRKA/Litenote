@@ -326,10 +326,14 @@ export const AIChat5: React.FC<AIChat5Props> = ({
 
           clearTimeout(clientTimeout);
 
-          if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
             const data = await res.json();
             if (data && data.text && data.text.trim()) {
               responseText = data.text.trim();
+              break;
+            } else if (data && data.error) {
+              responseText = data.text || `Ошибка AI: ${data.error}`;
               break;
             }
           }
@@ -338,8 +342,8 @@ export const AIChat5: React.FC<AIChat5Props> = ({
         }
 
         if (!responseText && attempt === 1) {
-          // Wait 400ms before automatic retry
-          await new Promise((resolve) => setTimeout(resolve, 400));
+          // Wait 300ms before automatic retry
+          await new Promise((resolve) => setTimeout(resolve, 300));
         }
       }
 
@@ -357,39 +361,24 @@ export const AIChat5: React.FC<AIChat5Props> = ({
             signal: controller.signal,
           });
           clearTimeout(clientTimeout);
-          if (res2.ok) {
+          const contentType2 = res2.headers.get('content-type') || '';
+          if (contentType2.includes('application/json')) {
             const data2 = await res2.json();
             if (data2 && data2.text && data2.text.trim()) {
               responseText = data2.text.trim();
             }
           }
-        } catch {
-          // Fallback to intelligent local engine below
+        } catch (err) {
+          console.warn('[Litenote AI] Fallback endpoint error:', err);
         }
       }
 
-      // If cloud network is offline or unreachable, generate an articulate, real conversational response
+      // Honest error notice if AI core was genuinely unreachable
       if (!responseText) {
         const isRussian = language === 'ru' || /[а-яА-ЯёЁ]/.test(textToSend);
-        const q = textToSend.toLowerCase();
-
-        if (isRussian) {
-          if (q.includes('привет') || q.includes('здравствуй') || q.includes('хай') || q.includes('добр')) {
-            responseText = 'Привет! Рад встрече. Я на связи и готов к работе — можем разобрать код, обсудить интересные мысли или набросать идеи для поста в ленту. Что у тебя нового?';
-          } else if (q.includes('как дел') || q.includes('как ты') || q.includes('что делаешь')) {
-            responseText = 'Дела отлично! Работаю на полной мощности в составе платформы LiteNote. Готов помочь с любыми задачами или просто душевно пообщаться. Как проходит твой день?';
-          } else if (q.includes('кто ты') || q.includes('что умеешь')) {
-            responseText = 'Я — **Litenote AI**, твой интеллектуальный компаньон и помощник. Умею писать и проверять код, проектировать архитектуру, вести открытые диалоги на любые темы и оформлять технические посты.';
-          } else {
-            responseText = `Отличный вопрос по теме «${textToSend.trim()}». Готов подробно разобрать эту задачу. Если хочешь уточнить детали или запустить песочницу — дай знать!`;
-          }
-        } else {
-          if (q.includes('hello') || q.includes('hi') || q.includes('hey')) {
-            responseText = 'Hello! Great to connect with you. I am ready to help—whether with code, architecture, or creative ideas for LiteNote. What are you working on today?';
-          } else {
-            responseText = `I hear you regarding "${textToSend.trim()}". I am fully ready to explore this with you—share any more details or code snippets you have!`;
-          }
-        }
+        responseText = isRussian
+          ? 'Не удалось получить ответ от Litenote AI. Проверьте сетевое подключение или наличие переменной GEMINI_API_KEY в настройках сервера.'
+          : 'Unable to reach the Litenote AI service. Please check your network connection or verify GEMINI_API_KEY on the server.';
       }
 
       // Construct dynamic inline action if relevant
