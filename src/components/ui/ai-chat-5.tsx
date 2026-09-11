@@ -304,36 +304,68 @@ export const AIChat5: React.FC<AIChat5Props> = ({
       let responseText = '';
       let fetchErrorOccurred = false;
 
-      try {
-        const controller = new AbortController();
-        const clientTimeout = setTimeout(() => controller.abort(), 25000);
+      // Primary attempt + automatic fast retry
+      for (let attempt = 1; attempt <= 2 && !responseText; attempt++) {
+        try {
+          const controller = new AbortController();
+          const clientTimeout = setTimeout(() => controller.abort(), 16000);
 
-        const res = await fetch('/api/ai/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: apiHistory,
-          }),
-          signal: controller.signal,
-        });
+          const res = await fetch('/api/ai/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: apiHistory,
+            }),
+            signal: controller.signal,
+          });
 
-        clearTimeout(clientTimeout);
+          clearTimeout(clientTimeout);
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.text) {
-            responseText = data.text;
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.text && data.text.trim()) {
+              responseText = data.text.trim();
+              break;
+            }
           }
-        } else {
-          fetchErrorOccurred = true;
+        } catch (fetchErr) {
+          console.warn(`[Litenote AI] Request attempt ${attempt} failed:`, fetchErr);
         }
-      } catch (fetchErr) {
-        console.error('[Litenote AI] API request failed:', fetchErr);
-        fetchErrorOccurred = true;
+
+        if (!responseText && attempt === 1) {
+          // Wait 600ms before automatic retry
+          await new Promise((resolve) => setTimeout(resolve, 600));
+        }
+      }
+
+      // Secondary fallback endpoint if multi-turn chat endpoint had an issue
+      if (!responseText) {
+        try {
+          const controller = new AbortController();
+          const clientTimeout = setTimeout(() => controller.abort(), 12000);
+          const res2 = await fetch('/api/gemini/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: textToSend,
+            }),
+            signal: controller.signal,
+          });
+          clearTimeout(clientTimeout);
+          if (res2.ok) {
+            const data2 = await res2.json();
+            if (data2 && data2.text) {
+              responseText = data2.text.trim();
+            }
+          }
+        } catch {
+          // Both endpoints failed
+        }
       }
 
       if (!responseText) {
-        responseText = language === 'ru'
+        const isRussian = language === 'ru' || /[а-яА-ЯёЁ]/.test(textToSend);
+        responseText = isRussian
           ? 'Извиняюсь, произошел временный сбой связи с ядром Litenote AI. Пожалуйста, повтори вопрос или отправь его еще раз.'
           : 'Sorry, a temporary network glitch occurred connecting to the Litenote AI core. Please resend your message.';
       }
@@ -705,6 +737,27 @@ export const AIChat5: React.FC<AIChat5Props> = ({
                               <Share2 className="w-3 h-3 text-emerald-400" />
                               <span className="text-[10px]">
                                 {language === 'ru' ? 'В ленту' : 'Post to Feed'}
+                              </span>
+                            </button>
+                          )}
+
+                          {(msg.content.includes('временный сбой') || msg.content.includes('temporary network glitch')) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const msgIndex = messages.findIndex((m) => m.id === msg.id);
+                                if (msgIndex > 0) {
+                                  const prevUserMsg = messages[msgIndex - 1];
+                                  if (prevUserMsg && prevUserMsg.sender === 'user') {
+                                    handleSendMessage(prevUserMsg.content);
+                                  }
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 font-medium transition-colors cursor-pointer"
+                            >
+                              <Sparkles className="w-3 h-3 text-emerald-400" />
+                              <span className="text-[10px]">
+                                {language === 'ru' ? 'Повторить запрос' : 'Retry'}
                               </span>
                             </button>
                           )}

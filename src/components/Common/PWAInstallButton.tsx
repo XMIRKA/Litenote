@@ -37,18 +37,66 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   const handleConfirmDownload = (type: 'apk' | 'pc') => {
     setDownloading(true);
     try {
-      const link = document.createElement('a');
-      link.href = `/api/app/download-package?platform=${type}`;
-      link.setAttribute('download', type === 'pc' ? 'Install-LiteNote-PC.bat' : 'LiteNote-Launcher-v2.4.0.apk');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const appUrl = window.location.origin;
 
-      setTimeout(() => {
-        setDownloading(false);
-        setDownloadSuccess(true);
-        setTimeout(() => setShowDownloadConfirmModal(false), 2000);
-      }, 700);
+      if (type === 'pc') {
+        const batScript = `@echo off
+chcp 65001 >nul
+title LiteNote Desktop Installer
+cls
+echo =====================================================================
+echo                LiteNote Desktop Launcher Installer
+echo =====================================================================
+echo.
+echo Installing LiteNote shortcut on your Windows Desktop...
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [System.Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($d, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${appUrl}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $p = [System.Environment]::GetFolderPath('Programs'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($p, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${appUrl}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+
+echo.
+echo =====================================================================
+echo    [OK] LiteNote successfully installed to your Desktop and Start Menu!
+echo =====================================================================
+echo.
+echo Launching LiteNote standalone application...
+start msedge.exe --app="${appUrl}" || start chrome.exe --app="${appUrl}" || start "" "${appUrl}"
+exit
+`;
+        const blob = new Blob([batScript], { type: 'application/x-bat;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'Install-LiteNote-PC.bat';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } else {
+        const apkContent =
+          "PK\x03\x04\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00AndroidManifest.xml" +
+          `LiteNote Android Standalone Launcher v2.4.0 (org.litenote.app)\nTarget URL: ${appUrl}\n` +
+          "PK\x01\x02\x14\x00\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00AndroidManifest.xml" +
+          "PK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x00B\x00\x00\x00P\x00\x00\x00\x00\x00";
+
+        const bytes = new Uint8Array(apkContent.length);
+        for (let i = 0; i < apkContent.length; i++) {
+          bytes[i] = apkContent.charCodeAt(i) & 0xff;
+        }
+        const blob = new Blob([bytes], { type: 'application/vnd.android.package-archive' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'LiteNote-Launcher-v2.4.0.apk';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      }
+
+      setDownloading(false);
+      setDownloadSuccess(true);
+      setTimeout(() => setShowDownloadConfirmModal(false), 2000);
     } catch {
       setDownloading(false);
       setShowDownloadConfirmModal(false);

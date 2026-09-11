@@ -158,8 +158,8 @@ function generateSmartFallback(query: string, language: string = "ru"): string {
 // Resilient AI multi-model cascade - fast & reliable model first
 const WORKING_AI_MODELS = [
   "gemini-3.1-flash-lite",
+  "gemini-3.6-flash",
   "gemini-3.8-flash",
-  "gemini-flash-latest",
 ];
 
 const DEFAULT_LITENOTE_AI_INSTRUCTION =
