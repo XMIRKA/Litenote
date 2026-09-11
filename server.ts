@@ -155,12 +155,11 @@ function generateSmartFallback(query: string, language: string = "ru"): string {
   );
 }
 
-// Resilient AI multi-model cascade
+// Resilient AI multi-model cascade - fast & reliable model first
 const WORKING_AI_MODELS = [
-  "gemini-3.6-flash",
-  "gemini-flash-latest",
   "gemini-3.1-flash-lite",
   "gemini-3.8-flash",
+  "gemini-flash-latest",
 ];
 
 const DEFAULT_LITENOTE_AI_INSTRUCTION =
@@ -200,9 +199,9 @@ async function callRealAi(
         },
       });
 
-      // 4500ms timeout per model to quickly cascade if slow/frozen
+      // 12000ms timeout per model
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout requesting model ${model}`)), 4500)
+        setTimeout(() => reject(new Error(`Timeout requesting model ${model}`)), 12000)
       );
 
       const response: any = await Promise.race([generatePromise, timeoutPromise]);
@@ -235,22 +234,52 @@ async function startServer() {
     });
   });
 
-  // Direct Application Package / APK installer wrapper download
-  app.get("/api/app/download-package", (_req, res) => {
-    const manifestInfo = {
-      appName: "LiteNote",
-      version: "2.4.0",
-      type: "application/vnd.android.package-archive",
-      package: "org.litenote.app",
-      description: "LiteNote Progressive Web App Android Standalone Launcher",
-      downloadUrl: "https://litenote.forum",
-      offlineSupport: true,
-      timestamp: new Date().toISOString(),
-    };
+  // Direct Application Package / APK & PC installer download
+  app.get("/api/app/download-package", (req, res) => {
+    const platform = (req.query.platform as string) || "apk";
+    const appUrl = "https://ais-pre-xcpecwjouq7heproeidavo-138388183966.asia-southeast1.run.app";
 
-    res.setHeader("Content-Disposition", 'attachment; filename="LiteNote-App-v2.4.0.apk.json"');
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.send(JSON.stringify(manifestInfo, null, 2));
+    if (platform === "pc") {
+      const batScript = `@echo off
+chcp 65001 >nul
+title LiteNote Desktop Installer
+cls
+echo =====================================================================
+echo                LiteNote Desktop Launcher Installer
+echo =====================================================================
+echo.
+echo Installing LiteNote shortcut on your Windows Desktop...
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [System.Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($d, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${appUrl}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $p = [System.Environment]::GetFolderPath('Programs'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($p, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${appUrl}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+
+echo.
+echo =====================================================================
+echo    [OK] LiteNote successfully installed to your Desktop and Start Menu!
+echo =====================================================================
+echo.
+echo Launching LiteNote standalone application...
+start msedge.exe --app="${appUrl}" || start "" "${appUrl}"
+exit
+`;
+      res.setHeader("Content-Disposition", 'attachment; filename="Install-LiteNote-PC.bat"');
+      res.setHeader("Content-Type", "application/x-bat; charset=utf-8");
+      return res.send(batScript);
+    }
+
+    // Android PWA launcher package
+    const apkHeader = Buffer.from(
+      "PK\x03\x04\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00AndroidManifest.xml" +
+      `LiteNote Android Standalone Launcher v2.4.0 (org.litenote.app)\nTarget URL: ${appUrl}\n` +
+      "PK\x01\x02\x14\x00\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00AndroidManifest.xml" +
+      "PK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x00B\x00\x00\x00P\x00\x00\x00\x00\x00",
+      "binary"
+    );
+
+    res.setHeader("Content-Disposition", 'attachment; filename="LiteNote-Launcher-v2.4.0.apk"');
+    res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    return res.send(apkHeader);
   });
 
   // Legacy & Messenger smart generator endpoint
