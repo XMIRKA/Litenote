@@ -134,11 +134,14 @@ export const PostCard: React.FC<PostCardProps> = ({
           targetLang: language === 'ru' ? 'ru' : 'en',
         }),
       });
-      const data = await response.json();
-      if (data && data.translatedText) {
-        setTranslatedText(data.translatedText);
-        setTranslatedLang(language);
-        setIsShowingTranslation(true);
+      const contentType = response.headers.get('content-type') || '';
+      if (response.ok && contentType.includes('application/json')) {
+        const data = await response.json();
+        if (data && data.translatedText) {
+          setTranslatedText(data.translatedText);
+          setTranslatedLang(language);
+          setIsShowingTranslation(true);
+        }
       }
     } catch (e) {
       console.error('Translation error', e);

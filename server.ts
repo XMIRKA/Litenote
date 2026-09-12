@@ -439,12 +439,30 @@ exit
 
     const cleanTargetLang = targetLang === "en" ? "en" : "ru";
 
+    // 1. Try Gemini AI translation if available
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const prompt = `Translate the following post text into ${cleanTargetLang === "ru" ? "Russian" : "English"} naturally and fluently. Preserve formatting, emojis, hashtags, and code snippets exactly as intended. Return ONLY the translated text, with no introductory text, no quotes, and no commentary.\n\nText:\n${text}`;
+        const aiRes = await callRealAi(
+          [{ role: "user", parts: [{ text: prompt }] }],
+          "You are a professional multilingual translator. Translate with highest fidelity and natural flow.",
+          0.3,
+          1024
+        );
+        if (aiRes && aiRes.text) {
+          return res.json({ translatedText: aiRes.text, model: aiRes.modelUsed });
+        }
+      } catch (geminiErr: any) {
+        console.warn("Gemini translate error, falling back to neural web:", geminiErr?.message);
+      }
+    }
+
+    // 2. Direct Neural Translation Service fallback
     try {
-      // Direct Neural Translation Service
       const url = `https://translate.google.com/m?tl=${encodeURIComponent(cleanTargetLang)}&q=${encodeURIComponent(text)}`;
       const r = await fetch(url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)'
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'
         }
       });
       if (r.ok) {
@@ -453,7 +471,7 @@ exit
         if (match && match[1]) {
           const translated = decodeHtmlEntities(match[1].trim());
           if (translated) {
-            return res.json({ translatedText: translated });
+            return res.json({ translatedText: translated, model: "neural-fallback" });
           }
         }
       }
@@ -461,8 +479,8 @@ exit
       console.warn("Translation engine note:", e?.message);
     }
 
-    // Fallback: return original text
-    res.json({ translatedText: text });
+    // 3. Fallback: return original text
+    res.json({ translatedText: text, fallback: true });
   });
 
   // Dedicated AI Code Assistant Node

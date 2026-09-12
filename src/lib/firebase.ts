@@ -11,11 +11,11 @@ import {
   updateProfile as updateAuthProfile
 } from 'firebase/auth';
 import {
+  initializeFirestore,
   getFirestore,
   collection,
   doc,
   getDoc,
-  getDocFromServer,
   setDoc,
   updateDoc,
   getDocs,
@@ -51,21 +51,22 @@ import firebaseConfig from '../../firebase-applet-config.json';
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
-export const db = (!firebaseConfig.firestoreDatabaseId || firebaseConfig.firestoreDatabaseId === '(default)')
-  ? getFirestore(app)
-  : getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
-// Test server connection as per skill
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase client offline check:', error.message);
-    }
-  }
+// Initialize Firestore with long-polling auto-detection for seamless iframe & proxy connectivity
+const databaseId = (!firebaseConfig.firestoreDatabaseId || firebaseConfig.firestoreDatabaseId === '(default)')
+  ? undefined
+  : firebaseConfig.firestoreDatabaseId;
+
+let firestoreInstance;
+try {
+  firestoreInstance = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  }, databaseId);
+} catch {
+  firestoreInstance = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
 }
-testConnection();
+
+export const db = firestoreInstance;
 
 // Skill standard error handler
 export enum OperationType {
