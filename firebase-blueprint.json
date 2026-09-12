@@ -181,12 +181,50 @@
         "calleeCandidates": { "type": "array" }
       },
       "required": ["id", "callerId", "calleeId", "callType", "status", "startedAt"]
+    },
+    "AIConversation": {
+      "title": "AIConversation",
+      "description": "User conversation thread with Litenote AI assistant",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 150 },
+        "lastMessageSnippet": { "type": "string", "maxLength": 300 },
+        "messageCount": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "title", "createdAt", "updatedAt"]
+    },
+    "AIMessage": {
+      "title": "AIMessage",
+      "description": "Individual message within an AI conversation thread",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "conversationId": { "type": "string" },
+        "userId": { "type": "string" },
+        "sender": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string", "maxLength": 15000 },
+        "action": { "type": "object" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "conversationId", "sender", "content", "timestamp"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
       "description": "User profiles and custom identities"
+    },
+    "/users/{userId}/ai_conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/AIConversation" },
+      "description": "Private AI conversations for a user"
+    },
+    "/users/{userId}/ai_conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/AIMessage" },
+      "description": "Individual messages in an AI conversation subcollection"
     },
     "/posts/{postId}": {
       "schema": { "$ref": "#/entities/Post" },

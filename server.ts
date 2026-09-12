@@ -13,14 +13,16 @@ function getGeminiApiKey(): string {
 
 // Lazy Gemini client helper with required telemetry headers
 let aiClient: GoogleGenAI | null = null;
+let lastUsedApiKey = "";
 function getGeminiAI(): GoogleGenAI {
-  if (!aiClient) {
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) {
+  const currentKey = getGeminiApiKey();
+  if (!aiClient || lastUsedApiKey !== currentKey) {
+    lastUsedApiKey = currentKey;
+    if (!currentKey) {
       console.warn("GEMINI_API_KEY / GEMINI_API_KEY2 is not set. Gemini features will run in high-quality local generation mode.");
     }
     aiClient = new GoogleGenAI({
-      apiKey: apiKey || "",
+      apiKey: currentKey || "",
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build',
@@ -33,15 +35,15 @@ function getGeminiAI(): GoogleGenAI {
 
 // Helper to sanitize chat messages for Gemini API
 // Gemini strictly requires: starts with 'user', roles alternate ('user', 'model'), non-empty text
-function sanitizeMessagesForGemini(rawMessages: Array<{ role?: string; text?: string }>) {
+function sanitizeMessagesForGemini(rawMessages: Array<{ role?: string; text?: string; content?: string }>) {
   if (!Array.isArray(rawMessages) || rawMessages.length === 0) {
-    return [{ role: "user", parts: [{ text: "Привет! Расскажи о возможностях Litenote." }] }];
+    return [{ role: "user", parts: [{ text: "Привет!" }] }];
   }
 
   const cleaned: Array<{ role: "user" | "model"; parts: [{ text: string }] }> = [];
 
   for (const m of rawMessages) {
-    const text = (m.text || "").trim();
+    const text = ((m.text || m.content || "") as string).trim();
     if (!text) continue;
 
     const role: "user" | "model" = m.role === "model" || m.role === "assistant" || m.role === "ai" ? "model" : "user";
@@ -341,8 +343,8 @@ exit
       const { messages, systemInstruction } = req.body || {};
       const apiKey = getGeminiApiKey();
 
-      const lastUserMessage =
-        (Array.isArray(messages) && messages.length > 0 ? messages[messages.length - 1]?.text : "") || "Привет!";
+      const lastMsg = Array.isArray(messages) && messages.length > 0 ? messages[messages.length - 1] : null;
+      const lastUserMessage = ((lastMsg?.text || lastMsg?.content || "") as string).trim() || "Привет!";
 
       const sanitizedContents = sanitizeMessagesForGemini(messages);
 

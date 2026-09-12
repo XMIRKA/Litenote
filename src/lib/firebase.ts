@@ -44,7 +44,9 @@ import {
   NotificationItem,
   Bookmark,
   CallSession,
-  DevTeamMember
+  DevTeamMember,
+  AIConversation,
+  AIMessageItem
 } from '../types';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -1517,5 +1519,162 @@ export async function addCallCandidateDoc(
     console.warn('Candidate add error:', error);
   }
 }
+
+// ==========================================
+// AI CONVERSATION HISTORY (FIRESTORE)
+// ==========================================
+
+export function subscribeAIConversations(
+  userId: string,
+  callback: (conversations: AIConversation[]) => void
+): () => void {
+  if (!userId) {
+    callback([]);
+    return () => {};
+  }
+  const colRef = collection(db, `users/${userId}/ai_conversations`);
+
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const convs = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      })) as AIConversation[];
+      // Client-side sort to avoid Firestore index requirement failures
+      convs.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+      callback(convs);
+    },
+    (error) => {
+      console.warn('subscribeAIConversations error:', error.message);
+    }
+  );
+}
+
+export async function createAIConversation(
+  userId: string,
+  initialTitle?: string,
+  customConvId?: string
+): Promise<string> {
+  if (!userId) throw new Error('User is required to create AI conversation');
+  const convRef = customConvId
+    ? doc(db, `users/${userId}/ai_conversations`, customConvId)
+    : doc(collection(db, `users/${userId}/ai_conversations`));
+  const now = Date.now();
+  const title = initialTitle || 'Новый диалог';
+  const data: AIConversation = {
+    id: convRef.id,
+    userId,
+    title,
+    messageCount: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await setDoc(convRef, cleanFirestoreData(data), { merge: true });
+  return convRef.id;
+}
+
+export async function updateAIConversation(
+  userId: string,
+  convId: string,
+  updates: Partial<AIConversation>
+): Promise<void> {
+  if (!userId || !convId) return;
+  const convRef = doc(db, `users/${userId}/ai_conversations`, convId);
+  await setDoc(
+    convRef,
+    cleanFirestoreData({
+      ...updates,
+      updatedAt: Date.now(),
+    }),
+    { merge: true }
+  );
+}
+
+export async function deleteAIConversation(
+  userId: string,
+  convId: string
+): Promise<void> {
+  if (!userId || !convId) return;
+  // 1. Delete all messages inside conversation subcollection
+  try {
+    const msgsSnap = await getDocs(
+      collection(db, `users/${userId}/ai_conversations/${convId}/messages`)
+    );
+    for (const msgDoc of msgsSnap.docs) {
+      await deleteDoc(msgDoc.ref);
+    }
+  } catch (err) {
+    console.warn('Error deleting subcollection messages:', err);
+  }
+
+  // 2. Delete the conversation record
+  const convRef = doc(db, `users/${userId}/ai_conversations`, convId);
+  await deleteDoc(convRef);
+}
+
+export function subscribeAIMessages(
+  userId: string,
+  convId: string,
+  callback: (messages: AIMessageItem[]) => void
+): () => void {
+  if (!userId || !convId) {
+    callback([]);
+    return () => {};
+  }
+  const colRef = collection(db, `users/${userId}/ai_conversations/${convId}/messages`);
+
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const msgs = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      })) as AIMessageItem[];
+      // Client-side sort guarantees correct chronology without index prerequisites
+      msgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+      callback(msgs);
+    },
+    (error) => {
+      console.warn('subscribeAIMessages error:', error.message);
+    }
+  );
+}
+
+export async function saveAIMessage(
+  userId: string,
+  convId: string,
+  msg: Omit<AIMessageItem, 'id'>,
+  customId?: string
+): Promise<string> {
+  if (!userId || !convId) return '';
+  const colRef = collection(db, `users/${userId}/ai_conversations/${convId}/messages`);
+  const docRef = customId ? doc(colRef, customId) : doc(colRef);
+  const data: AIMessageItem = {
+    id: docRef.id,
+    ...msg,
+  };
+  await setDoc(docRef, cleanFirestoreData(data), { merge: true });
+
+  // Update conversation last snippet, message count and updatedAt safely using setDoc merge
+  try {
+    const snippet = (msg.content || '').slice(0, 100).replace(/\n/g, ' ');
+    const convRef = doc(db, `users/${userId}/ai_conversations`, convId);
+    await setDoc(
+      convRef,
+      {
+        lastMessageSnippet: snippet,
+        updatedAt: Date.now(),
+        messageCount: increment(1),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Failed to update conv meta snippet:', err);
+  }
+
+  return docRef.id;
+}
+
 
 

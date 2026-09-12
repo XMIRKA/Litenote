@@ -317,3 +317,23 @@ export type ActiveTab =
   | 'analytics'
   | 'profile'
   | 'settings';
+
+export interface AIConversation {
+  id: string;
+  userId: string;
+  title: string;
+  lastMessageSnippet?: string;
+  messageCount?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AIMessageItem {
+  id: string;
+  conversationId: string;
+  userId: string;
+  sender: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  action?: any;
+}
