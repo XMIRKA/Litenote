@@ -42,7 +42,7 @@ export default async function handler(req: any, res: any) {
     promptText = `Напиши привлекательный, живой и профессиональный пост для соцсети разработчиков с подходящими тегами на ${language === "ru" ? "русском языке" : "английском языке"} по теме: ${prompt}`;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (process.env.GEMINI_API_KEY2 || process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) {
     return res.status(200).json({
       result: generateSmartFallback(promptText, language),

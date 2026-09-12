@@ -63,11 +63,11 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (process.env.GEMINI_API_KEY2 || process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) {
     return res.status(500).json({
       error: "GEMINI_API_KEY is not configured",
-      text: "Внимание: на сервере Vercel не настроен GEMINI_API_KEY. Добавьте его в настройках проекта Vercel (Project Settings -> Environment Variables)."
+      text: "Внимание: на сервере Vercel не настроен GEMINI_API_KEY / GEMINI_API_KEY2. Добавьте его в настройках проекта Vercel (Project Settings -> Environment Variables)."
     });
   }
 

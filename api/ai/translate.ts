@@ -54,7 +54,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const cleanTargetLang = targetLang === "en" ? "en" : "ru";
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (process.env.GEMINI_API_KEY2 || process.env.GEMINI_API_KEY || "").trim();
 
   // 1. Try Gemini AI translation if API key is present
   if (apiKey) {

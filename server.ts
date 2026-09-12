@@ -6,13 +6,18 @@ import { createServer as createViteServer } from "vite";
 
 dotenv.config();
 
+// Gemini API key resolver (supports GEMINI_API_KEY2 and GEMINI_API_KEY)
+function getGeminiApiKey(): string {
+  return (process.env.GEMINI_API_KEY2 || process.env.GEMINI_API_KEY || "").trim();
+}
+
 // Lazy Gemini client helper with required telemetry headers
 let aiClient: GoogleGenAI | null = null;
 function getGeminiAI(): GoogleGenAI {
   if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = getGeminiApiKey();
     if (!apiKey) {
-      console.warn("GEMINI_API_KEY is not set. Gemini features will run in high-quality local generation mode.");
+      console.warn("GEMINI_API_KEY / GEMINI_API_KEY2 is not set. Gemini features will run in high-quality local generation mode.");
     }
     aiClient = new GoogleGenAI({
       apiKey: apiKey || "",
@@ -176,7 +181,7 @@ async function callRealAi(
   temperature: number = 0.75,
   maxOutputTokens: number = 2048
 ): Promise<{ text: string; modelUsed: string }> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = getGeminiApiKey();
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not configured");
   }
@@ -297,7 +302,7 @@ exit
   app.post("/api/gemini/generate", async (req, res) => {
     try {
       const { prompt, systemInstruction } = req.body || {};
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = getGeminiApiKey();
 
       if (!prompt) {
         return res.status(400).json({ error: "Missing prompt" });
@@ -334,7 +339,7 @@ exit
   app.post("/api/ai/chat", async (req, res) => {
     try {
       const { messages, systemInstruction } = req.body || {};
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = getGeminiApiKey();
 
       const lastUserMessage =
         (Array.isArray(messages) && messages.length > 0 ? messages[messages.length - 1]?.text : "") || "Привет!";
@@ -382,7 +387,7 @@ exit
   app.post("/api/ai/assist", async (req, res) => {
     const { prompt, type, language = "ru" } = req.body || {};
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = getGeminiApiKey();
 
       let promptText = prompt || "Расскажи о трендах разработки";
       if (type === "summarize") {
@@ -440,7 +445,7 @@ exit
     const cleanTargetLang = targetLang === "en" ? "en" : "ru";
 
     // 1. Try Gemini AI translation if available
-    if (process.env.GEMINI_API_KEY) {
+    if (getGeminiApiKey()) {
       try {
         const prompt = `Translate the following post text into ${cleanTargetLang === "ru" ? "Russian" : "English"} naturally and fluently. Preserve formatting, emojis, hashtags, and code snippets exactly as intended. Return ONLY the translated text, with no introductory text, no quotes, and no commentary.\n\nText:\n${text}`;
         const aiRes = await callRealAi(
@@ -487,7 +492,7 @@ exit
   app.post("/api/ai/code-assist", async (req, res) => {
     const { action = "explain", code = "", language = "javascript", instructions = "" } = req.body || {};
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = getGeminiApiKey();
 
       let prompt = `Ты — ведущий Staff Software Engineer и эксперт по оптимизации алгоритмов, чистой архитектуре и безопасности.
 Язык исходного кода: ${language}.

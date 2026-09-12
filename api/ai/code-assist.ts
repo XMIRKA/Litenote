@@ -52,10 +52,10 @@ ${code || "// empty code"}
     prompt += `\n\nСпециальные указания разработчика:\n${instructions.trim()}`;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (process.env.GEMINI_API_KEY2 || process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) {
     return res.status(200).json({
-      result: `### Анализ кода (${language})\n\nКод корректен по синтаксису. Для расширенного AI-анализа убедитесь, что в переменных окружения настроен \`GEMINI_API_KEY\`.\n\n\`\`\`${language}\n${code}\n\`\`\``,
+      result: `### Анализ кода (${language})\n\nКод корректен по синтаксису. Для расширенного AI-анализа убедитесь, что в переменных окружения настроен \`GEMINI_API_KEY\` или \`GEMINI_API_KEY2\`.\n\n\`\`\`${language}\n${code}\n\`\`\``,
       model: "fallback",
     });
   }
