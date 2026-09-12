@@ -650,6 +650,44 @@ export async function deleteConversationDoc(convId: string): Promise<void> {
   }
 }
 
+export async function togglePinConversationDoc(convId: string, userId: string, isPinned: boolean): Promise<void> {
+  const path = `conversations/${convId}`;
+  try {
+    const convRef = doc(db, 'conversations', convId);
+    await updateDoc(convRef, {
+      pinnedBy: isPinned ? arrayUnion(userId) : arrayRemove(userId),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function setTypingStatusDoc(
+  convId: string,
+  userId: string,
+  userName: string,
+  isTyping: boolean
+): Promise<void> {
+  if (!convId || !userId) return;
+  try {
+    const convRef = doc(db, 'conversations', convId);
+    if (isTyping) {
+      await updateDoc(convRef, {
+        [`typingUsers.${userId}`]: {
+          userName,
+          timestamp: Date.now(),
+        },
+      }).catch(() => {});
+    } else {
+      await updateDoc(convRef, {
+        [`typingUsers.${userId}`]: deleteField(),
+      }).catch(() => {});
+    }
+  } catch (error) {
+    // Non-critical, ignore typing sync errors silently
+  }
+}
+
 // -------------------------------------------------------------
 // Group & Channel Administration
 // -------------------------------------------------------------
@@ -974,6 +1012,44 @@ export async function markAllNotificationsReadDoc(userId: string): Promise<void>
     await Promise.all(updates);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteNotificationDoc(notifId: string): Promise<void> {
+  const path = `notifications/${notifId}`;
+  try {
+    await deleteDoc(doc(db, 'notifications', notifId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export async function deleteReadNotificationsDoc(userId: string): Promise<void> {
+  const path = 'notifications';
+  try {
+    const q = query(collection(db, 'notifications'), where('userId', '==', userId));
+    const snap = await getDocs(q);
+    const deletions = snap.docs
+      .filter((d) => {
+        const data = d.data();
+        return data.isRead || data.read;
+      })
+      .map((d) => deleteDoc(d.ref));
+    await Promise.all(deletions);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export async function clearAllNotificationsDoc(userId: string): Promise<void> {
+  const path = 'notifications';
+  try {
+    const q = query(collection(db, 'notifications'), where('userId', '==', userId));
+    const snap = await getDocs(q);
+    const deletions = snap.docs.map((d) => deleteDoc(d.ref));
+    await Promise.all(deletions);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 

@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { translations } from '../../lib/i18n';
 import { THEME_CONFIGS } from '../../lib/theme';
 import { UserProfile, Post, Conversation, ActivityLog } from '../../types';
+import { getCleanAvatarUrl } from '../../lib/avatar';
 import {
   subscribeActiveSessions,
   subscribeActivityLogs,
@@ -297,7 +298,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="relative">
                       <img
-                        src={session.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${session.handle}`}
+                        src={getCleanAvatarUrl(session.handle || session.displayName, session.avatarUrl)}
                         alt={session.displayName}
                         className="w-8 h-8 rounded-lg object-cover border border-[#192F23]"
                       />

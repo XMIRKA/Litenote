@@ -1578,8 +1578,8 @@ export const AIChat5: React.FC<AIChat5Props> = ({
       </div>
 
       {/* ================= 4. INPUT COMPOSER ================= */}
-      <div className="shrink-0 p-3 sm:p-4 bg-[#08111E]/95 border-t border-[#14263E] backdrop-blur-md z-10">
-        <div className="relative rounded-2xl bg-[#040810] border border-[#172B46] focus-within:border-emerald-500/60 focus-within:ring-2 focus-within:ring-emerald-500/10 transition-all shadow-inner">
+      <div className="shrink-0 p-2.5 sm:p-4 bg-[#08111E]/95 border-t border-[#14263E] backdrop-blur-md z-10">
+        <div className="relative rounded-2xl bg-[#040810] border border-[#172B46] focus-within:border-emerald-500/60 focus-within:ring-2 focus-within:ring-emerald-500/10 transition-all shadow-inner flex items-center">
           <textarea
             ref={textareaRef}
             rows={1}
@@ -1588,13 +1588,13 @@ export const AIChat5: React.FC<AIChat5Props> = ({
             onKeyDown={handleKeyDown}
             placeholder={
               language === 'ru'
-                ? 'Спросите что угодно: поболтать, написать код, создать пост или запустить команду...'
-                : 'Ask anything: chat freely, debug code, draft posts, or request an action...'
+                ? 'Спросите Litenote AI... (код, диалог, идеи)'
+                : 'Ask Litenote AI... (code, chat, ideas)'
             }
-            className="w-full pl-4 pr-12 py-3 bg-transparent text-slate-100 placeholder-slate-500 text-sm font-sans resize-none focus:outline-none max-h-40 custom-scrollbar"
+            className="w-full pl-3.5 pr-12 py-2.5 sm:py-3 bg-transparent text-slate-100 placeholder-slate-500 placeholder:truncate text-sm font-sans resize-none focus:outline-none max-h-40 overflow-x-hidden overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words leading-relaxed min-h-[42px]"
           />
 
-          <div className="absolute right-2 bottom-2 flex items-center gap-1">
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
             <button
               type="button"
               onClick={() => handleSendMessage()}
@@ -1611,11 +1611,14 @@ export const AIChat5: React.FC<AIChat5Props> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-between mt-2 px-1 text-[11px] text-slate-500 font-mono">
-          <span>
+        <div className="flex items-center justify-between mt-1.5 px-1 text-[11px] text-slate-500 font-mono">
+          <span className="hidden sm:inline">
             {language === 'ru' ? 'Enter — отправить, Shift+Enter — перенос строки' : 'Enter to send, Shift+Enter for new line'}
           </span>
-          <span className="flex items-center gap-1">
+          <span className="sm:hidden text-[10px]">
+            {language === 'ru' ? 'Litenote AI Copilot' : 'Litenote AI Copilot'}
+          </span>
+          <span className="flex items-center gap-1 text-[10px] sm:text-[11px]">
             <ShieldCheck className="w-3 h-3 text-emerald-400" />
             <span>{language === 'ru' ? 'Защищено Action Gate' : 'Action Gate Protected'}</span>
           </span>

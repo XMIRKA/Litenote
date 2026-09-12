@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { translations } from '../../lib/i18n';
 import { THEME_CONFIGS } from '../../lib/theme';
 import { compressImage } from '../../lib/imageUtils';
+import { getCleanAvatarUrl } from '../../lib/avatar';
 import { Post } from '../../types';
 import {
   X,
@@ -211,7 +212,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#1E293B] bg-[#0F172A]">
           <div className="flex items-center gap-3">
             <img
-              src={user.avatarUrl}
+              src={getCleanAvatarUrl(user.handle || user.displayName, user.avatarUrl)}
               alt={user.displayName}
               className="w-10 h-10 rounded-xl object-cover border border-[#2A3B53]"
             />

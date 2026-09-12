@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { compressImageFile } from '../../lib/imageCompressor';
 import {
   X,
   Send,
@@ -135,70 +136,22 @@ export const MediaSendModal: React.FC<MediaSendModalProps> = ({
 
     try {
       if (mediaType === 'image') {
-        // Compress image for ultra fast and reliable delivery
-        const reader = new FileReader();
-        await new Promise<void>((resolve, reject) => {
-          reader.onload = async (e) => {
-            try {
-              const rawDataUrl = e.target?.result as string;
-              const img = new Image();
-              img.onload = async () => {
-                try {
-                  const canvas = document.createElement('canvas');
-                  const MAX_DIM = 1280;
-                  let width = img.width;
-                  let height = img.height;
+        // High-performance client-side image compression
+        const compressed = await compressImageFile(file, {
+          maxWidth: 1600,
+          maxHeight: 1600,
+          quality: 0.82,
+          mimeType: 'image/webp',
+        });
 
-                  if (width > MAX_DIM || height > MAX_DIM) {
-                    if (width > height) {
-                      height = Math.round((height * MAX_DIM) / width);
-                      width = MAX_DIM;
-                    } else {
-                      width = Math.round((width * MAX_DIM) / height);
-                      height = MAX_DIM;
-                    }
-                  }
-
-                  canvas.width = width;
-                  canvas.height = height;
-                  const ctx = canvas.getContext('2d');
-                  let finalDataUrl = rawDataUrl;
-                  if (ctx) {
-                    ctx.drawImage(img, 0, 0, width, height);
-                    finalDataUrl = canvas.toDataURL('image/jpeg', 0.80);
-                  }
-
-                  setSendStage('sending');
-                  await onSend({
-                    mediaUrl: finalDataUrl,
-                    mediaType: 'image',
-                    caption: caption.trim(),
-                    fileName: file.name,
-                    fileSize: formatFileSize(file.size),
-                    posterUrl: finalDataUrl,
-                  });
-                  resolve();
-                } catch (err) {
-                  reject(err);
-                }
-              };
-              img.onerror = () => {
-                setSendStage('sending');
-                onSend({
-                  mediaUrl: rawDataUrl,
-                  mediaType: 'image',
-                  caption: caption.trim(),
-                  fileName: file.name,
-                  fileSize: formatFileSize(file.size),
-                }).then(resolve).catch(reject);
-              };
-              img.src = rawDataUrl;
-            } catch (err) {
-              reject(err);
-            }
-          };
-          reader.onerror = (err) => reject(err);
-          reader.readAsDataURL(file);
+        setSendStage('sending');
+        await onSend({
+          mediaUrl: compressed.dataUrl,
+          mediaType: 'image',
+          caption: caption.trim(),
+          fileName: file.name,
+          fileSize: formatFileSize(compressed.compressedSize),
+          posterUrl: compressed.dataUrl,
         });
       } else {
         // Video: Convert to base64 data URL and send with poster thumbnail

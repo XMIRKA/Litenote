@@ -2,13 +2,19 @@
 
 @layer base {
   :root {
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
     --theme-accent: #10B981;
     --theme-accent-rgb: 16, 185, 129;
-    --theme-accent-glow: rgba(16, 185, 129, 0.38);
+    --theme-accent-glow: 0 0 20px rgba(16, 185, 129, 0.38);
     --theme-accent-subtle: rgba(16, 185, 129, 0.12);
     --theme-accent-border: rgba(16, 185, 129, 0.40);
+    --theme-bg-root: #07090E;
+    --theme-bg-surface: #0C121E;
+    --theme-bg-elevated: #111728;
+    --theme-border-color: rgba(255, 255, 255, 0.07);
+    --ui-scale: 1;
+    --ui-radius-base: 12px;
   }
 
   html {
@@ -16,11 +22,12 @@
     min-height: 100dvh;
     touch-action: manipulation;
     -webkit-text-size-adjust: 100%;
+    font-size: calc(16px * var(--ui-scale, 1));
   }
 
   body {
     font-family: var(--font-sans);
-    background-color: #07090E;
+    background-color: var(--theme-bg-root, #07090E);
     color: #F1F5F9;
     min-height: 100%;
     min-height: 100dvh;
@@ -38,7 +45,28 @@
     display: flex;
     flex-direction: column;
     overflow-x: hidden;
+    background-color: var(--theme-bg-root, #07090E);
   }
+}
+
+/* Reduced Motion Mode - Optimized */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html[data-reduce-motion="true"] {
+  --motion-reduce: 1;
+}
+
+html[data-reduce-motion="true"] .animate-pulse,
+html[data-reduce-motion="true"] .animate-spin,
+html[data-reduce-motion="true"] .animate-bounce {
+  animation: none !important;
 }
 
 /* Sleek Minimalist Scrollbar */
@@ -69,27 +97,62 @@
 }
 
 .surface-card {
-  background-color: #0D121F;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 0.875rem;
+  background-color: var(--theme-bg-surface, #0D121F);
+  border: 1px solid var(--theme-border-color, rgba(255, 255, 255, 0.07));
+  border-radius: var(--ui-radius-base, 0.875rem);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .surface-card:hover {
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .surface-elevated {
-  background-color: #111728;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background-color: var(--theme-bg-elevated, #111728);
+  border: 1px solid var(--theme-border-color, rgba(255, 255, 255, 0.09));
   box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.7);
 }
 
-/* Subtle dot matrix background for chats */
-.chat-pattern-bg {
-  background-color: #07090E;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+/* Dynamic Chat Wallpaper Patterns */
+.chat-pattern-bg,
+.chat-pattern-dots {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
   background-size: 24px 24px;
+}
+
+.chat-pattern-grid {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.chat-pattern-mesh {
+  background: radial-gradient(circle at 10% 20%, rgba(var(--theme-accent-rgb), 0.08) 0%, transparent 40%),
+              radial-gradient(circle at 90% 80%, rgba(var(--theme-accent-rgb), 0.06) 0%, transparent 40%);
+}
+
+.chat-pattern-circuit {
+  background-image: 
+    radial-gradient(rgba(var(--theme-accent-rgb), 0.2) 1.5px, transparent 1.5px),
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.chat-pattern-scanlines {
+  background: linear-gradient(
+    to bottom,
+    rgba(255,255,255,0),
+    rgba(255,255,255,0) 50%,
+    rgba(0, 0, 0, 0.4) 50%,
+    rgba(0, 0, 0, 0.4)
+  );
+  background-size: 100% 4px;
+}
+
+.chat-pattern-clean {
+  background: none;
 }
 
 /* Hide scrollbar helper */
@@ -100,4 +163,5 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
 

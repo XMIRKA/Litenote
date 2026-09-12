@@ -1,4 +1,46 @@
-export type AccentColor = 'emerald' | 'cyan' | 'amber' | 'violet' | 'lime' | 'rose' | 'indigo' | 'gold';
+export type AccentColor =
+  | 'emerald'
+  | 'cyan'
+  | 'amber'
+  | 'violet'
+  | 'lime'
+  | 'rose'
+  | 'indigo'
+  | 'gold'
+  | 'neon_purple'
+  | 'sunset'
+  | 'silver'
+  | 'mint';
+
+export type FontFamily =
+  | 'jakarta'
+  | 'inter'
+  | 'outfit'
+  | 'space'
+  | 'jetbrains'
+  | 'fira'
+  | 'syne'
+  | 'montserrat'
+  | 'urbanist'
+  | 'spectral'
+  | 'cinzel'
+  | 'system';
+export type FontSize = 'sm' | 'md' | 'lg' | 'xl';
+export type ThemeBackground = 'obsidian' | 'oled' | 'sapphire' | 'graphite' | 'twilight' | 'emerald_dark';
+export type BorderRadiusStyle = 'sharp' | 'balanced' | 'soft' | 'pill';
+export type ChatWallpaper = 'dots' | 'grid' | 'clean' | 'mesh' | 'circuit' | 'scanlines';
+export type GlowIntensity = 'none' | 'subtle' | 'vibrant';
+
+export interface UIThemeSettings {
+  accentColor: AccentColor;
+  fontFamily: FontFamily;
+  fontSize: FontSize;
+  themeBackground: ThemeBackground;
+  borderRadius: BorderRadiusStyle;
+  chatWallpaper: ChatWallpaper;
+  glowIntensity: GlowIntensity;
+  reduceMotion?: boolean;
+}
 
 export type Language = 'en' | 'ru';
 
@@ -20,6 +62,7 @@ export interface UserCustomization {
   techStack?: string[];
   pinnedPostId?: string;
   soundEffects?: boolean;
+  themeSettings?: Partial<UIThemeSettings>;
   socialLinks?: {
     telegram?: string;
     twitter?: string;
@@ -243,6 +286,8 @@ export interface Conversation {
   };
   pinnedMessageId?: string;
   pinnedMessage?: Message;
+  pinnedBy?: string[];
+  typingUsers?: Record<string, { userName: string; timestamp: number }>;
   updatedAt: number;
   createdAt?: number;
   unreadCount?: Record<string, number>;

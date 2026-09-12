@@ -185,7 +185,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full p-3 text-left flex items-center gap-3 hover:bg-slate-800/60 transition-colors cursor-pointer"
               >
                 <img
-                  src={su.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${su.handle}`}
+                  src={getCleanAvatarUrl(su.handle || su.displayName, su.avatarUrl)}
                   alt={su.displayName}
                   className="w-9 h-9 rounded-full object-cover border border-slate-700 bg-slate-800"
                 />
@@ -457,7 +457,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="w-full p-3 rounded-xl bg-[#0E1526] border border-slate-800 flex items-center gap-3 text-left hover:border-emerald-500 transition-colors"
               >
                 <img
-                  src={su.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${su.handle}`}
+                  src={getCleanAvatarUrl(su.handle || su.displayName, su.avatarUrl)}
                   alt={su.displayName}
                   className="w-10 h-10 rounded-xl object-cover bg-slate-800 border border-slate-700"
                 />

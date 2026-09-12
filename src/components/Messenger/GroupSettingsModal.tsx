@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Conversation, UserProfile } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { isCreatorAccount, isCoFounderAccount } from '../../lib/creator';
+import { getCleanAvatarUrl } from '../../lib/avatar';
 import { CreatorBadge, CoFounderBadge, VerifiedCheck } from '../Common/CreatorBadge';
 import {
   X,
@@ -243,7 +244,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                 <label className="text-xs font-semibold text-slate-300">Аватар группы</label>
                 <div className="flex items-center gap-4">
                   <img
-                    src={avatarUrl}
+                    src={getCleanAvatarUrl(name || 'group', avatarUrl)}
                     alt="Group Avatar"
                     className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-500/40 bg-slate-800 shadow-md"
                   />
@@ -364,7 +365,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <img
-                                src={candidate.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${candidate.handle}`}
+                                src={getCleanAvatarUrl(candidate.handle || candidate.displayName, candidate.avatarUrl)}
                                 alt={candidate.displayName}
                                 className="w-6 h-6 rounded-lg object-cover bg-slate-800"
                               />
@@ -418,7 +419,7 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
 
                     const displayName = profile?.displayName || (uid === user?.uid ? user.displayName : 'Пользователь');
                     const handle = profile?.handle || (uid === user?.uid ? user.handle : 'user');
-                    const avatar = profile?.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${handle}`;
+                    const avatar = getCleanAvatarUrl(handle || displayName, profile?.avatarUrl);
 
                     return (
                       <div

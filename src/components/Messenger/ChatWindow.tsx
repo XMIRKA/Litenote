@@ -108,7 +108,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onStartCall,
   onBackMobile,
 }) => {
-  const { user, accentColor, language, setSelectedUserId, setActiveTab } = useAuth();
+  const { user, accentColor, themeSettings, language, setSelectedUserId, setActiveTab } = useAuth();
   const t = translations[language];
   const theme = THEME_CONFIGS[accentColor];
 
@@ -376,7 +376,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 w-full bg-[#060810] relative overflow-hidden select-none">
       {/* Subtle Chat Wallpaper Pattern */}
-      <div className="absolute inset-0 chat-pattern-bg pointer-events-none opacity-25" />
+      <div
+        className={`absolute inset-0 ${
+          themeSettings?.chatWallpaper === 'grid'
+            ? 'chat-pattern-grid'
+            : themeSettings?.chatWallpaper === 'mesh'
+            ? 'chat-pattern-mesh'
+            : themeSettings?.chatWallpaper === 'circuit'
+            ? 'chat-pattern-circuit'
+            : themeSettings?.chatWallpaper === 'scanlines'
+            ? 'chat-pattern-scanlines'
+            : themeSettings?.chatWallpaper === 'clean'
+            ? 'chat-pattern-clean'
+            : 'chat-pattern-dots'
+        } pointer-events-none opacity-25`}
+      />
 
       {/* Top Header */}
       <div className="px-3 sm:px-4 py-2.5 bg-[#080B14] border-b border-[#151D2D] flex items-center justify-between z-10 shrink-0 min-h-[52px]">

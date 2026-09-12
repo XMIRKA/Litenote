@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { UserProfile } from '../../types';
+import { getCleanAvatarUrl } from '../../lib/avatar';
 import {
   X,
   Search,
@@ -261,7 +262,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                   >
                     <div className="relative shrink-0">
                       <img
-                        src={target.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${target.handle}`}
+                        src={getCleanAvatarUrl(target.handle || target.displayName, target.avatarUrl)}
                         alt={target.displayName}
                         className="w-10 h-10 rounded-xl object-cover border border-slate-700 bg-slate-800"
                       />
@@ -424,7 +425,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <img
-                            src={u.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.handle}`}
+                            src={getCleanAvatarUrl(u.handle || u.displayName, u.avatarUrl)}
                             alt={u.displayName}
                             className="w-7 h-7 rounded-lg object-cover border border-slate-700 bg-slate-800"
                           />

@@ -13,6 +13,7 @@ import {
 } from '../../lib/firebase';
 import { CreatorBadge, VerifiedCheck } from '../Common/CreatorBadge';
 import { isCreatorAccount } from '../../lib/creator';
+import { getCleanAvatarUrl } from '../../lib/avatar';
 import { AnalyticsDashboard } from '../Analytics/AnalyticsDashboard';
 import {
   Shield,
@@ -591,7 +592,7 @@ export const ModerationPanelModal: React.FC<ModerationPanelModalProps> = ({
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
                             <img
-                              src={u.avatarUrl || 'https://api.dicebear.com/7.x/bottts/svg?seed=user'}
+                              src={getCleanAvatarUrl(u.handle || u.displayName, u.avatarUrl)}
                               alt={u.displayName}
                               className={`w-11 h-11 rounded-xl object-cover bg-slate-800 ${
                                 isCreator ? 'border-2 border-amber-400' : 'border border-slate-700'
@@ -723,7 +724,7 @@ export const ModerationPanelModal: React.FC<ModerationPanelModalProps> = ({
                           <div className="flex-1 min-w-0 space-y-1.5">
                             <div className="flex items-center gap-2">
                               <img
-                                src={post.authorAvatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=avatar'}
+                                src={getCleanAvatarUrl(post.authorHandle || post.authorName, post.authorAvatar)}
                                 alt={post.authorName}
                                 className="w-6 h-6 rounded-md object-cover"
                               />

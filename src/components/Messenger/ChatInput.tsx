@@ -408,10 +408,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           )}
         </div>
 
-        {/* Dedicated Quick Photo/Video Button */}
+        {/* Dedicated Quick Photo/Video Button - visible on sm+ screens */}
         <button
           onClick={() => photoVideoInputRef.current?.click()}
-          className="p-1.5 sm:p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-800/60 rounded-xl transition-colors cursor-pointer shrink-0"
+          className="hidden sm:flex p-1.5 sm:p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-800/60 rounded-xl transition-colors cursor-pointer shrink-0"
           title="Отправить фото или видео"
         >
           <ImageIcon className="w-5 h-5" />
@@ -488,10 +488,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           rows={1}
           placeholder={
             language === 'ru'
-              ? 'Напишите сообщение... (Enter для отправки)'
-              : 'Write a message... (Enter to send)'
+              ? 'Напишите сообщение...'
+              : 'Write a message...'
           }
-          className="flex-1 min-w-0 bg-transparent text-white text-base sm:text-xs placeholder:text-slate-500 resize-none py-2 px-1 focus:outline-none max-h-32 leading-relaxed"
+          className="flex-1 min-w-0 bg-transparent text-white text-sm sm:text-xs placeholder:text-slate-500 placeholder:truncate resize-none py-2 px-1.5 focus:outline-none max-h-32 overflow-x-hidden overflow-y-auto leading-relaxed custom-scrollbar whitespace-pre-wrap break-words"
         />
 
         {/* AI Smart Replies Trigger Button */}

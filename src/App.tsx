@@ -60,7 +60,11 @@ import {
   updateFriendshipStatusDoc,
   toggleFollowDoc,
   toggleBookmarkDoc,
+  markNotificationReadDoc,
   markAllNotificationsReadDoc,
+  deleteNotificationDoc,
+  deleteReadNotificationsDoc,
+  clearAllNotificationsDoc,
   toggleMessageReactionDoc,
   pinMessageDoc,
   deleteMessageDoc,
@@ -77,6 +81,12 @@ import {
 
 import { Terminal, Loader2 } from 'lucide-react';
 import { OfflineIndicator } from './components/Common/OfflineIndicator';
+import { CommandPalette } from './components/CommandPalette/CommandPalette';
+import {
+  playMessageSentSound,
+  playMessageReceivedSound,
+  playReactionSound
+} from './lib/audioEffects';
 
 const MainAppContent: React.FC = () => {
   const {
@@ -145,10 +155,28 @@ const MainAppContent: React.FC = () => {
   // Modals, Drawers & Entry Animation
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isDevToolsOpen, setIsDevToolsOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
   const prevNotifIdsRef = React.useRef<Set<string>>(new Set());
   const isInitialNotifLoadRef = React.useRef<boolean>(true);
+  const lastKnownMessageCountRef = React.useRef<Record<string, number>>({});
+  const activeTabRef = React.useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const selectedConvIdRef = React.useRef(selectedConvId);
+  selectedConvIdRef.current = selectedConvId;
+
+  // Global Command Palette Shortcut (Cmd+K / Ctrl+K)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
 
   // Request browser notification permission once user interacts/logs in
   useEffect(() => {
@@ -260,14 +288,36 @@ const MainAppContent: React.FC = () => {
       notifs.forEach((item) => {
         if (!prevNotifIdsRef.current.has(item.id) && !item.isRead && !item.read) {
           prevNotifIdsRef.current.add(item.id);
+
+          // Check if user is currently looking at this exact chat in the foreground
+          const isAppFocused = typeof document !== 'undefined' && !document.hidden && document.hasFocus();
+          const isActivelyViewingChat =
+            isAppFocused &&
+            activeTabRef.current === 'messenger' &&
+            Boolean(selectedConvIdRef.current) &&
+            (
+              (item.referenceId && item.referenceId === selectedConvIdRef.current) ||
+              (item.actorId && selectedConvIdRef.current.includes(item.actorId))
+            );
+
+          if (isActivelyViewingChat) {
+            // Already in chat: mark as read automatically without popping intrusive toast or playing sound
+            markNotificationReadDoc(item.id).catch(() => {});
+            return;
+          }
+
+          // User is outside the app, on another tab/view, or in a different chat -> show live notification
           pushLiveNotification({
             title: item.title || 'Новое уведомление в LiteNote',
             message: item.message,
             type: item.type as any,
             avatarUrl: item.actorAvatar,
             onClick: () => {
-              if (item.type === 'message') {
+              if (item.type === 'message' || item.type === 'new_message') {
                 setActiveTab('messenger');
+                if (item.referenceId) {
+                  setSelectedConvId(item.referenceId);
+                }
               } else if (item.postId) {
                 setActiveTab('feed');
               } else if (item.type === 'friend_request' || item.type === 'friend_accepted') {
@@ -293,13 +343,22 @@ const MainAppContent: React.FC = () => {
       unsubNotifs();
       unsubBookmarks();
     };
-  }, [user]);
+  }, [user?.uid]);
 
   // 4. Subscribe to Messages for Selected Conversation & Mark as Read
   useEffect(() => {
     if (!selectedConvId) return;
 
     const unsub = subscribeMessages(selectedConvId, (msgs) => {
+      const prevCount = lastKnownMessageCountRef.current[selectedConvId] || 0;
+      if (prevCount > 0 && msgs.length > prevCount) {
+        const lastMsg = msgs[msgs.length - 1];
+        if (lastMsg && user && lastMsg.senderId !== user.uid) {
+          playMessageReceivedSound();
+        }
+      }
+      lastKnownMessageCountRef.current[selectedConvId] = msgs.length;
+
       setMessages((prev) => {
         const next = {
           ...prev,
@@ -388,6 +447,7 @@ const MainAppContent: React.FC = () => {
       setIsAuthModalOpen(true);
       return;
     }
+    playReactionSound();
     try {
       await togglePostReaction(postId, emoji, user.uid);
       const post = posts.find((p) => p.id === postId);
@@ -536,6 +596,7 @@ const MainAppContent: React.FC = () => {
       setIsAuthModalOpen(true);
       return;
     }
+    playMessageSentSound();
     const newMsg: Message = {
       id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       conversationId: convId,
@@ -575,6 +636,7 @@ const MainAppContent: React.FC = () => {
             actorId: user.uid,
             actorName: user.displayName,
             actorAvatar: user.avatarUrl,
+            referenceId: convId,
             title: `Сообщение от @${user.handle}`,
             message: text.substring(0, 80),
             createdAt: Date.now(),
@@ -974,6 +1036,7 @@ const MainAppContent: React.FC = () => {
     waveform: number[]
   ) => {
     if (!user) return;
+    playMessageSentSound();
     const newMsg: Message = {
       id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       conversationId: convId,
@@ -1016,6 +1079,7 @@ const MainAppContent: React.FC = () => {
     }
   ) => {
     if (!user) return;
+    playMessageSentSound();
     const newMsg: Message = {
       id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       conversationId: convId,
@@ -1062,6 +1126,7 @@ const MainAppContent: React.FC = () => {
             actorId: user.uid,
             actorName: user.displayName,
             actorAvatar: user.avatarUrl,
+            referenceId: convId,
             title: `Новое ${payload.mediaType === 'image' ? 'фото' : 'видео'} от @${user.handle}`,
             message: payload.caption
               ? payload.caption.substring(0, 80)
@@ -1086,6 +1151,7 @@ const MainAppContent: React.FC = () => {
     fileSize: string
   ) => {
     if (!user) return;
+    playMessageSentSound();
     const newMsg: Message = {
       id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       conversationId: convId,
@@ -1117,6 +1183,7 @@ const MainAppContent: React.FC = () => {
 
   const handleAddMessageReaction = async (convId: string, messageId: string, emoji: string) => {
     if (!user) return;
+    playReactionSound();
 
     // Instant optimistic update in local state
     setMessages((prev) => {
@@ -1538,6 +1605,21 @@ const MainAppContent: React.FC = () => {
         onClose={() => setIsNotificationsOpen(false)}
         notifications={notifications}
         onMarkAllRead={() => user && markAllNotificationsReadDoc(user.uid)}
+        onDeleteNotification={(notifId) => deleteNotificationDoc(notifId)}
+        onClearReadNotifications={() => user && deleteReadNotificationsDoc(user.uid)}
+        onClearAllNotifications={() => user && clearAllNotificationsDoc(user.uid)}
+        onSelectNotification={(notif) => {
+          if (notif.type === 'message' || notif.type === 'new_message') {
+            setActiveTab('messenger');
+            if (notif.referenceId) {
+              setSelectedConvId(notif.referenceId);
+            }
+          } else if (notif.postId) {
+            setActiveTab('feed');
+          } else if (notif.type === 'friend_request' || notif.type === 'friend_accepted') {
+            setActiveTab('people');
+          }
+        }}
       />
 
       <AuthModal
@@ -1564,6 +1646,27 @@ const MainAppContent: React.FC = () => {
           onClose={handleActiveCallClosed}
         />
       )}
+
+      {/* Global Quick Command Palette (Cmd+K / Ctrl+K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        conversations={conversations}
+        allUsers={effectiveAllUsers}
+        onSelectConversation={(id) => {
+          setSelectedConvId(id);
+          setActiveTab('messenger');
+        }}
+        onNavigateTab={(tab) => {
+          setActiveTab(tab as any);
+        }}
+        onOpenNewChat={() => {
+          setActiveTab('messenger');
+          setSelectedConvId(null);
+        }}
+        onOpenCreatePost={() => setOpenCreatePost(true)}
+        onOpenDevTools={() => setIsDevToolsOpen(true)}
+      />
 
       {/* Network Connectivity Offline Toast */}
       <OfflineIndicator />

@@ -5,6 +5,7 @@ import { THEME_CONFIGS } from '../../lib/theme';
 import { AccentColor, Language, Post, UserProfile, Conversation } from '../../types';
 import { ModerationPanelModal } from './ModerationPanelModal';
 import { PWAInstallButton } from '../Common/PWAInstallButton';
+import { AppearanceCustomizer } from './AppearanceCustomizer';
 import {
   Settings,
   Globe,
@@ -18,7 +19,8 @@ import {
   ShieldAlert,
   Server,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -174,68 +176,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* 3. Accent Theme */}
-      <div className="p-5 rounded-2xl bg-[#0F172A] border border-[#1E293B] space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
-            <Palette className="w-4 h-4" style={{ color: theme.hex }} />
-            <span>{language === 'ru' ? 'Цветовой акцент' : 'Color Theme Accent'}</span>
-          </div>
-          <span
-            className="text-[11px] font-mono px-2.5 py-0.5 rounded-full font-semibold border flex items-center gap-1.5 transition-colors"
-            style={{
-              borderColor: `${theme.hex}50`,
-              backgroundColor: `${theme.hex}15`,
-              color: theme.hex,
-            }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: theme.hex }} />
-            {theme.name}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-          {(['emerald', 'cyan', 'amber', 'violet', 'lime'] as AccentColor[]).map((col) => {
-            const conf = THEME_CONFIGS[col];
-            const isSelected = accentColor === col;
-            return (
-              <button
-                key={col}
-                type="button"
-                onClick={() => setAccentColor(col)}
-                style={
-                  isSelected
-                    ? {
-                        borderColor: conf.hex,
-                        backgroundColor: `${conf.hex}1a`,
-                        boxShadow: `0 0 20px rgba(${conf.rgb}, 0.35)`,
-                      }
-                    : undefined
-                }
-                className={`p-3 rounded-xl border flex flex-col items-center gap-2 transition-all cursor-pointer relative group active:scale-95 ${
-                  isSelected
-                    ? 'ring-1 border-current'
-                    : 'border-[#1E293B] hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/80'
-                }`}
-              >
-                <div
-                  className="w-5 h-5 rounded-full shadow-md flex items-center justify-center relative transition-transform group-hover:scale-110"
-                  style={{ backgroundColor: conf.hex }}
-                >
-                  {isSelected && <Check className="w-3 h-3 text-slate-950 stroke-[3]" />}
-                </div>
-                <span
-                  className={`text-xs transition-colors ${
-                    isSelected ? 'text-white font-bold' : 'text-slate-400 group-hover:text-slate-200 font-medium'
-                  }`}
-                >
-                  {conf.name}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* 3. Detailed UI Customization & Appearance */}
+      <AppearanceCustomizer />
 
       {/* PWA / Native App Installation Card */}
       <PWAInstallButton variant="settings" />

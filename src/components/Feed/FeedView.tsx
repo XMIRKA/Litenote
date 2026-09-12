@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { translations } from '../../lib/i18n';
 import { THEME_CONFIGS } from '../../lib/theme';
 import { Post, Comment, UserProfile } from '../../types';
+import { getCleanAvatarUrl } from '../../lib/avatar';
 import { PostCard } from './PostCard';
 import {
   Sparkles,
@@ -119,7 +120,7 @@ export const FeedView: React.FC<FeedViewProps> = ({
         >
           <div className="flex items-center gap-3">
             <img
-              src={user.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.handle}`}
+              src={getCleanAvatarUrl(user.handle || user.displayName, user.avatarUrl)}
               alt={user.displayName}
               className="w-10 h-10 rounded-full object-cover border border-slate-700 bg-slate-800"
             />

@@ -19,8 +19,8 @@ import {
   User as FirebaseUser
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
-import { UserProfile, AccentColor, Language, ActiveTab } from '../types';
-import { applyThemeToDocument } from '../lib/theme';
+import { UserProfile, AccentColor, Language, ActiveTab, UIThemeSettings } from '../types';
+import { applyThemeToDocument, DEFAULT_UI_THEME, THEME_PRESETS } from '../lib/theme';
 
 export async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -39,6 +39,10 @@ interface AuthContextType {
   setActiveTab: (tab: ActiveTab) => void;
   accentColor: AccentColor;
   setAccentColor: (color: AccentColor) => void;
+  themeSettings: UIThemeSettings;
+  setThemeSettings: (settings: Partial<UIThemeSettings>) => void;
+  applyPreset: (presetId: string) => void;
+  resetThemeSettings: () => void;
   language: Language;
   setLanguage: (lang: Language) => void;
   selectedUserId: string | null;
@@ -60,6 +64,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_ACCENT_KEY = 'litenote_accent_color';
+const LOCAL_STORAGE_THEME_KEY = 'litenote_theme_settings';
 const LOCAL_STORAGE_LANG_KEY = 'litenote_language';
 const LOCAL_STORAGE_USER_KEY = 'litenote_current_user_profile';
 
@@ -82,21 +87,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const unsubUserDocRef = useRef<(() => void) | null>(null);
 
-  const [accentColor, setAccentColorState] = useState<AccentColor>(() => {
+  const [themeSettings, setThemeSettingsState] = useState<UIThemeSettings>(() => {
     try {
-      const stored = localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY) as AccentColor;
-      const initial = stored || 'emerald';
-      applyThemeToDocument(initial);
+      const stored = localStorage.getItem(LOCAL_STORAGE_THEME_KEY);
+      const storedAccent = localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY) as AccentColor;
+      let initial: UIThemeSettings = { ...DEFAULT_UI_THEME };
+      if (stored) {
+        initial = { ...initial, ...JSON.parse(stored) };
+      }
+      if (storedAccent) {
+        initial.accentColor = storedAccent;
+      }
       return initial;
     } catch {
-      applyThemeToDocument('emerald');
-      return 'emerald';
+      return DEFAULT_UI_THEME;
     }
   });
 
-  useEffect(() => {
-    applyThemeToDocument(accentColor);
-  }, [accentColor]);
+  const accentColor = themeSettings.accentColor;
 
   const [language, setLanguageState] = useState<Language>(() => {
     try {
@@ -106,22 +114,61 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   });
 
-  const setAccentColor = (color: AccentColor) => {
-    setAccentColorState(color);
-    localStorage.setItem(LOCAL_STORAGE_ACCENT_KEY, color);
-    applyThemeToDocument(color);
-    if (user) {
-      updateProfileData({ accentColor: color }).catch((err) => {
-        console.warn('Silent sync accentColor to profile:', err);
-      });
+  // Apply theme to document when themeSettings change
+  useEffect(() => {
+    applyThemeToDocument(themeSettings.accentColor, themeSettings);
+  }, [themeSettings]);
+
+  const setThemeSettings = (updates: Partial<UIThemeSettings>) => {
+    setThemeSettingsState((prev) => {
+      const updated: UIThemeSettings = { ...prev, ...updates };
+      try {
+        localStorage.setItem(LOCAL_STORAGE_THEME_KEY, JSON.stringify(updated));
+        if (updates.accentColor) {
+          localStorage.setItem(LOCAL_STORAGE_ACCENT_KEY, updates.accentColor);
+        }
+      } catch {}
+      return updated;
+    });
+
+    if (user && db) {
+      try {
+        const cleaned = cleanFirestoreData({
+          accentColor: updates.accentColor || themeSettings.accentColor,
+          customization: {
+            ...(user.customization || {}),
+            themeSettings: { ...themeSettings, ...updates },
+          },
+        });
+        setDoc(doc(db, 'users', user.uid), cleaned, { merge: true }).catch(() => {});
+      } catch {}
     }
+  };
+
+  const applyPreset = (presetId: string) => {
+    const found = THEME_PRESETS.find((p) => p.id === presetId);
+    if (found) {
+      setThemeSettings(found.settings);
+    }
+  };
+
+  const resetThemeSettings = () => {
+    setThemeSettings(DEFAULT_UI_THEME);
+  };
+
+  const setAccentColor = (color: AccentColor) => {
+    setThemeSettings({ accentColor: color });
   };
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
-    localStorage.setItem(LOCAL_STORAGE_LANG_KEY, lang);
-    if (user) {
-      updateProfileData({ language: lang });
+    try {
+      localStorage.setItem(LOCAL_STORAGE_LANG_KEY, lang);
+    } catch {}
+    if (user && db) {
+      try {
+        setDoc(doc(db, 'users', user.uid), { language: lang }, { merge: true }).catch(() => {});
+      } catch {}
     }
   };
 
@@ -145,8 +192,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               } catch {}
               return merged;
             });
-            if (data.accentColor) setAccentColorState(data.accentColor);
-            if (data.language) setLanguageState(data.language);
+            if (data.customization?.themeSettings) {
+              setThemeSettingsState((prev) => ({ ...prev, ...data.customization!.themeSettings }));
+            } else if (data.accentColor) {
+              setThemeSettingsState((prev) => ({ ...prev, accentColor: data.accentColor }));
+            }
+            if (data.language) {
+              setLanguageState(data.language);
+            }
           }
         },
         (err) => {
@@ -167,7 +220,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const parsed = JSON.parse(saved) as UserProfile;
         if (parsed && parsed.uid) {
           setUser(parsed);
-          if (parsed.accentColor) setAccentColorState(parsed.accentColor);
+          if (parsed.customization?.themeSettings) {
+            setThemeSettingsState((prev) => ({ ...prev, ...parsed.customization!.themeSettings }));
+          } else if (parsed.accentColor) {
+            setThemeSettingsState((prev) => ({ ...prev, accentColor: parsed.accentColor }));
+          }
           if (parsed.language) setLanguageState(parsed.language);
           attachUserDocListener(parsed.uid);
         }
@@ -578,8 +635,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(updated));
     } catch {}
 
-    if (updates.accentColor) {
-      setAccentColorState(updates.accentColor);
+    if (updates.customization?.themeSettings) {
+      setThemeSettingsState((prev) => ({ ...prev, ...updates.customization!.themeSettings }));
+    } else if (updates.accentColor) {
+      setThemeSettingsState((prev) => ({ ...prev, accentColor: updates.accentColor! }));
     }
     if (updates.language) {
       setLanguageState(updates.language);
@@ -609,6 +668,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setActiveTab,
         accentColor,
         setAccentColor,
+        themeSettings,
+        setThemeSettings,
+        applyPreset,
+        resetThemeSettings,
         language,
         setLanguage,
         selectedUserId,
