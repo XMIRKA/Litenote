@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { getIntroVideo, saveIntroVideo } from '../../lib/cacheManager';
 import {
   THEME_CONFIGS,
   FONTS_CONFIG,
@@ -40,6 +41,10 @@ import {
   Feather,
   Crown,
   Compass,
+  Film,
+  Upload,
+  Play,
+  Trash2,
 } from 'lucide-react';
 
 const PRESET_ICONS: Record<string, React.ReactNode> = {
@@ -58,6 +63,32 @@ export const AppearanceCustomizer: React.FC = () => {
 
   const isRu = language === 'ru';
   const currentAccent = THEME_CONFIGS[themeSettings.accentColor] || THEME_CONFIGS.emerald;
+
+  const [customIntro, setCustomIntro] = useState<string | null>(null);
+  const [isPreviewingIntro, setIsPreviewingIntro] = useState(false);
+  const introFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    getIntroVideo().then((val) => setCustomIntro(val));
+  }, []);
+
+  const handleUploadIntro = (file: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const dataUrl = e.target?.result as string;
+      if (dataUrl) {
+        await saveIntroVideo(dataUrl);
+        setCustomIntro(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClearIntro = async () => {
+    await saveIntroVideo('');
+    setCustomIntro(null);
+  };
 
   const accentKeys: AccentColor[] = [
     'emerald',
@@ -779,6 +810,69 @@ export const AppearanceCustomizer: React.FC = () => {
                 />
               </button>
             </div>
+
+            {/* Intro Video Management */}
+            <div className="pt-3 border-t border-white/5 space-y-2">
+              <input
+                ref={introFileInputRef}
+                type="file"
+                accept="video/mp4,video/webm,video/*"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    handleUploadIntro(e.target.files[0]);
+                  }
+                }}
+              />
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
+                    <Film className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>{isRu ? 'Видео-интро при входе' : 'App Intro Video'}</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {customIntro
+                      ? isRu
+                        ? 'Пользовательский .mp4 ролик установлен'
+                        : 'Custom .mp4 video is active'
+                      : isRu
+                      ? 'Встроенное интро LiteNote (MA Developer)'
+                      : 'Built-in LiteNote Intro (MA Developer)'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {customIntro && (
+                    <button
+                      type="button"
+                      onClick={handleClearIntro}
+                      className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs transition-colors cursor-pointer"
+                      title={isRu ? 'Сбросить интро' : 'Reset intro'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => introFileInputRef.current?.click()}
+                    className="px-2.5 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-300 text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Upload className="w-3 h-3" />
+                    <span>{isRu ? 'Загрузить .mp4' : 'Upload .mp4'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {customIntro && (
+                <div className="relative rounded-xl overflow-hidden border border-white/10 bg-black aspect-video max-h-40 flex items-center justify-center">
+                  <video
+                    src={customIntro}
+                    controls
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       </div>

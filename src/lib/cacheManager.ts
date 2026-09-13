@@ -139,3 +139,11 @@ export function getLocalJSON<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
+
+export async function saveIntroVideo(dataUrlOrBlob: string): Promise<void> {
+  await cacheMediaItem('app_intro_video', dataUrlOrBlob);
+}
+
+export async function getIntroVideo(): Promise<string | null> {
+  return await getCachedMediaItem('app_intro_video');
+}
