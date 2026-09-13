@@ -7,7 +7,8 @@ import {
   checkHandleAvailable,
   cleanFirestoreData,
   syncUserProfileToConversations,
-  syncUserProfileToPosts
+  syncUserProfileToPosts,
+  updateUserPresence
 } from '../lib/firebase';
 import {
   signInWithPopup,
@@ -301,6 +302,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (unsubUserDocRef.current) unsubUserDocRef.current();
     };
   }, []);
+
+  // Presence heartbeat interval
+  useEffect(() => {
+    if (!user?.uid) return;
+    updateUserPresence(user).catch(() => {});
+    const interval = setInterval(() => {
+      updateUserPresence(user).catch(() => {});
+    }, 20000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        updateUserPresence(user).catch(() => {});
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
+  }, [user?.uid]);
 
   const signInWithGoogle = async () => {
     if (!auth) throw new Error('Firebase Auth not initialized');

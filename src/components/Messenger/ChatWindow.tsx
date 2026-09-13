@@ -198,20 +198,30 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       ? 'Litenote AI'
       : conversation.name || liveOther?.displayName || 'Чат';
 
-  const chatSubtitle =
-    conversation.type === 'ai_bot'
-      ? (language === 'ru' ? 'Всесторонний собеседник • Онлайн' : 'All-around Companion • Online')
-      : liveOther
-      ? `@${liveOther.handle} • ${
-          liveOther.status === 'online'
-            ? language === 'ru'
-              ? 'В сети'
-              : 'Online'
-            : language === 'ru'
-            ? 'Был(а) недавно'
-            : 'Offline'
-        }`
-      : 'Зашифрованный диалог';
+  const activeTypingEntries = Object.entries(conversation.typingUsers || {}).filter(
+    ([uid, info]) => uid !== user?.uid && Date.now() - info.timestamp < 5000
+  );
+  const activeTypingName = activeTypingEntries.length > 0 ? activeTypingEntries[0][1].userName : null;
+
+  const chatSubtitle = activeTypingName ? (
+    <span className="text-emerald-400 font-medium animate-pulse">
+      {activeTypingName} {language === 'ru' ? 'печатает...' : 'is typing...'}
+    </span>
+  ) : conversation.type === 'ai_bot' ? (
+    language === 'ru' ? 'Всесторонний собеседник • Онлайн' : 'All-around Companion • Online'
+  ) : liveOther ? (
+    `@${liveOther.handle} • ${
+      liveOther.status === 'online' || (liveOther.lastActiveAt && Date.now() - liveOther.lastActiveAt < 45000)
+        ? language === 'ru'
+          ? 'В сети'
+          : 'Online'
+        : language === 'ru'
+        ? 'Не в сети'
+        : 'Offline'
+    }`
+  ) : (
+    'Зашифрованный диалог'
+  );
 
   // Search filtering
   useEffect(() => {

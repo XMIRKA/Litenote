@@ -82,6 +82,7 @@ export interface UserProfile {
   bannerUrl: string;
   bio: string;
   status: 'online' | 'idle' | 'busy' | 'offline';
+  lastActiveAt?: number;
   customStatus?: string; // e.g. "Compiling Linux kernel..."
   accentColor: AccentColor;
   language: Language;

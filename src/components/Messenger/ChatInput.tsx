@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { setTypingStatusDoc } from '../../lib/firebase';
 import { translations } from '../../lib/i18n';
 import { THEME_CONFIGS } from '../../lib/theme';
 import { Message } from '../../types';
@@ -55,7 +56,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   recentMessages = [],
   conversationId,
 }) => {
-  const { accentColor, language } = useAuth();
+  const { user, accentColor, language } = useAuth();
   const t = translations[language];
   const theme = THEME_CONFIGS[accentColor];
 
@@ -66,6 +67,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [smartReplies, setSmartReplies] = useState<string[]>([]);
   const [isLoadingSmartReplies, setIsLoadingSmartReplies] = useState(false);
   const [uploadingFileName, setUploadingFileName] = useState<string | null>(null);
+
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Selected file for Photo/Video Preview Modal before sending
   const [pendingMediaFile, setPendingMediaFile] = useState<File | null>(null);
@@ -129,6 +132,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       };
     }
 
+    if (conversationId && user) {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      setTypingStatusDoc(conversationId, user.uid, user.displayName, false).catch(() => {});
+    }
+
     onSendMessage(text.trim(), replyPayload);
     setText('');
     setSmartReplies([]);
@@ -151,9 +159,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value);
+    const val = e.target.value;
+    setText(val);
     e.target.style.height = 'auto';
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+
+    if (conversationId && user) {
+      setTypingStatusDoc(conversationId, user.uid, user.displayName, true).catch(() => {});
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        setTypingStatusDoc(conversationId, user.uid, user.displayName, false).catch(() => {});
+      }, 3000);
+    }
   };
 
   // Photo / Video File Select Handler

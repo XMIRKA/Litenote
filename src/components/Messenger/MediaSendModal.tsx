@@ -154,7 +154,14 @@ export const MediaSendModal: React.FC<MediaSendModalProps> = ({
           posterUrl: compressed.dataUrl,
         });
       } else {
+        if (file.size > 30 * 1024 * 1024) {
+          alert('Видео превышает 30 МБ. Пожалуйста, выберите файл меньшего размера для стабильной отправки.');
+          setIsSending(false);
+          setSendStage('idle');
+          return;
+        }
         // Video: Convert to base64 data URL and send with poster thumbnail
+        setSendStage('processing');
         const reader = new FileReader();
         await new Promise<void>((resolve, reject) => {
           reader.onload = async (e) => {

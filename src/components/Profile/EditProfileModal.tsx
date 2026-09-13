@@ -690,34 +690,17 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-slate-300 block mb-1">
-                    {language === 'ru' ? 'Статус сети' : 'Network Status'}
-                  </label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs bg-[#070C15] text-slate-200 border border-[#172338] rounded-xl focus:outline-none focus:border-emerald-400"
-                  >
-                    <option value="online">🟢 В сети (Online)</option>
-                    <option value="idle">🟡 Отошел (Idle)</option>
-                    <option value="busy">🔴 Занят (Busy)</option>
-                    <option value="offline">⚪ Не в сети (Offline)</option>
-                  </select>
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="text-xs font-bold text-slate-300 block mb-1">
-                    {language === 'ru' ? 'Кастомный статус / Девиз' : 'Custom Status'}
-                  </label>
-                  <input
-                    type="text"
-                    value={customStatus}
-                    onChange={(e) => setCustomStatus(e.target.value)}
-                    placeholder={language === 'ru' ? 'например: 💻 Кожу на Rust // 🚀 Деплою в облако' : 'e.g. 💻 Coding in Rust // 🚀 Deploying'}
-                    className="w-full px-3.5 py-2 text-xs bg-[#070C15] text-slate-200 border border-[#172338] rounded-xl focus:outline-none focus:border-emerald-400"
-                  />
-                </div>
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  {language === 'ru' ? 'Кастомный статус / Девиз' : 'Custom Status'}
+                </label>
+                <input
+                  type="text"
+                  value={customStatus}
+                  onChange={(e) => setCustomStatus(e.target.value)}
+                  placeholder={language === 'ru' ? 'например: 💻 Кожу на Rust // 🚀 Деплою в облако' : 'e.g. 💻 Coding in Rust // 🚀 Deploying'}
+                  className="w-full px-3.5 py-2 text-xs bg-[#070C15] text-slate-200 border border-[#172338] rounded-xl focus:outline-none focus:border-emerald-400"
+                />
               </div>
 
               <div>
