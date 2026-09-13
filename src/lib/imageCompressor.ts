@@ -16,9 +16,9 @@ export async function compressImageFile(
   options: CompressionOptions = {}
 ): Promise<{ dataUrl: string; originalSize: number; compressedSize: number; reductionPercent: number }> {
   const {
-    maxWidth = 1600,
-    maxHeight = 1600,
-    quality = 0.82,
+    maxWidth = 1200,
+    maxHeight = 1200,
+    quality = 0.76,
     mimeType = 'image/webp',
   } = options;
 

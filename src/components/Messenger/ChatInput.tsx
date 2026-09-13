@@ -69,6 +69,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [uploadingFileName, setUploadingFileName] = useState<string | null>(null);
 
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTypingPingRef = useRef<number>(0);
 
   // Selected file for Photo/Video Preview Modal before sending
   const [pendingMediaFile, setPendingMediaFile] = useState<File | null>(null);
@@ -134,6 +135,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     if (conversationId && user) {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      lastTypingPingRef.current = 0;
       setTypingStatusDoc(conversationId, user.uid, user.displayName, false).catch(() => {});
     }
 
@@ -165,11 +167,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
 
     if (conversationId && user) {
-      setTypingStatusDoc(conversationId, user.uid, user.displayName, true).catch(() => {});
+      const now = Date.now();
+      // Throttle typing updates to once every 2 seconds during active typing
+      if (now - lastTypingPingRef.current > 2000) {
+        lastTypingPingRef.current = now;
+        setTypingStatusDoc(conversationId, user.uid, user.displayName, true).catch(() => {});
+      }
+
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => {
+        lastTypingPingRef.current = 0;
         setTypingStatusDoc(conversationId, user.uid, user.displayName, false).catch(() => {});
-      }, 3000);
+      }, 3500);
     }
   };
 

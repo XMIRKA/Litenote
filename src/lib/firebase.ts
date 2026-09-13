@@ -48,6 +48,7 @@ import {
   AIConversation,
   AIMessageItem
 } from '../types';
+import { cacheMediaItem, getCachedMediaItem } from './cacheManager';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase
@@ -358,7 +359,7 @@ export async function createOrGetConversation(conv: Conversation): Promise<strin
   }
 }
 
-const CHUNK_SIZE = 450000;
+const CHUNK_SIZE = 700000;
 const mediaCache = new Map<string, string>();
 
 function getSessionCachedMedia(msgId: string): string | null {
@@ -374,6 +375,7 @@ function setSessionCachedMedia(msgId: string, data: string): void {
     if (data && data.length < 5000000) {
       sessionStorage.setItem(`media_${msgId}`, data);
     }
+    cacheMediaItem(msgId, data).catch(() => {});
   } catch (e) {}
 }
 
@@ -385,6 +387,12 @@ export async function fetchMessageMedia(convId: string, messageId: string): Prom
   if (sessionData) {
     mediaCache.set(messageId, sessionData);
     return sessionData;
+  }
+
+  const idbData = await getCachedMediaItem(messageId);
+  if (idbData) {
+    mediaCache.set(messageId, idbData);
+    return idbData;
   }
 
   try {
@@ -476,8 +484,8 @@ export async function sendMessageDoc(convId: string, message: Message): Promise<
   const path = `conversations/${convId}/messages/${message.id}`;
   try {
     const rawMedia = message.mediaUrl || '';
-    // If rawMedia is longer than 400k chars, chunk it to stay well within Firestore doc limits
-    const shouldChunk = rawMedia.length > 400000;
+    // If rawMedia is longer than 750k chars, chunk it to stay safely within Firestore 1MB doc limits
+    const shouldChunk = rawMedia.length > 750000;
 
     let mediaUrlToStore = rawMedia;
     let isChunked = false;
@@ -497,7 +505,7 @@ export async function sendMessageDoc(convId: string, message: Message): Promise<
       totalChunks = chunks.length;
       mediaUrlToStore = ''; // Main document remains compact and lightweight
 
-      // Write chunks in controlled parallel batches of 6
+      // Write chunks in controlled parallel batches
       try {
         const batchSize = 6;
         for (let b = 0; b < chunks.length; b += batchSize) {
@@ -1272,9 +1280,10 @@ export function isUserOnline(u?: { status?: string; lastActiveAt?: number } | nu
   if (!u) return false;
   if (u.status === 'offline') return false;
   if (u.lastActiveAt && typeof u.lastActiveAt === 'number') {
-    return Date.now() - u.lastActiveAt < 55000;
+    // 90 second active window aligned with 25s presence heartbeat
+    return Date.now() - u.lastActiveAt < 90000;
   }
-  return false;
+  return u.status === 'online';
 }
 
 export async function updateUserPresence(user: UserProfile, isOnline: boolean = true): Promise<void> {

@@ -51,6 +51,15 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'direct' | 'group' | 'ai'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [, setListTicker] = useState(0);
+
+  // 1.5s presence & typing refresh ticker for conversation list
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setListTicker((v) => v + 1);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, []);
 
   const findLiveUser = (uid?: string): UserProfile | null => {
     if (!uid) return null;
@@ -170,7 +179,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     if (!conv.typingUsers || !user) return null;
     const now = Date.now();
     for (const [uid, info] of Object.entries(conv.typingUsers)) {
-      if (uid !== user.uid && now - (info.timestamp || 0) < 6000) {
+      if (uid !== user.uid && now - (info.timestamp || 0) < 4500) {
         return info.userName || (language === 'ru' ? 'Собеседник' : 'Someone');
       }
     }

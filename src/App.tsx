@@ -82,7 +82,8 @@ import {
   addGroupMembersDoc,
   removeGroupMemberDoc,
   toggleGroupAdminDoc,
-  votePollDoc
+  votePollDoc,
+  updateUserPresence
 } from './lib/firebase';
 
 import { Terminal, Loader2 } from 'lucide-react';
@@ -168,6 +169,8 @@ const MainAppContent: React.FC = () => {
   const isInitialNotifLoadRef = React.useRef<boolean>(true);
   const notifiedCallIdsRef = React.useRef<Set<string>>(new Set());
   const lastKnownMessageCountRef = React.useRef<Record<string, number>>({});
+  const notifiedConvLastMsgRef = React.useRef<Record<string, number>>({});
+  const appSessionStartTimeRef = React.useRef<number>(Date.now());
   const activeTabRef = React.useRef(activeTab);
   activeTabRef.current = activeTab;
   const selectedConvIdRef = React.useRef(selectedConvId);
@@ -187,12 +190,76 @@ const MainAppContent: React.FC = () => {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
-  // Request browser notification permission once user interacts/logs in
+  // Request browser notification permission once user interacts or logs in
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+    const triggerPermission = () => {
       requestNotificationPermission().catch(() => {});
-    }
+    };
+    // Attempt permission request and also hook to first user interaction
+    triggerPermission();
+    window.addEventListener('click', triggerPermission, { once: true });
+    window.addEventListener('keydown', triggerPermission, { once: true });
+    return () => {
+      window.removeEventListener('click', triggerPermission);
+      window.removeEventListener('keydown', triggerPermission);
+    };
   }, [user]);
+
+  // Robust User Presence Engine (25s Heartbeat + Activity Throttle + Visibility + Page Hide)
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    // 1. Initial presence ping
+    updateUserPresence(user, true).catch(() => {});
+
+    // 2. Regular 25s heartbeat ticker when tab is open
+    const heartbeatInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        updateUserPresence(user, true).catch(() => {});
+      }
+    }, 25000);
+
+    // 3. Throttled activity refresh (e.g. typing, clicking, scrolling)
+    let lastActivityPing = Date.now();
+    const handleUserActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityPing > 18000) {
+        lastActivityPing = now;
+        updateUserPresence(user, true).catch(() => {});
+      }
+    };
+
+    // 4. Tab visibility change (returning to tab immediately triggers online status)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        lastActivityPing = Date.now();
+        updateUserPresence(user, true).catch(() => {});
+      }
+    };
+
+    // 5. Clean unload
+    const handlePageHide = () => {
+      updateUserPresence(user, false).catch(() => {});
+    };
+
+    window.addEventListener('mousemove', handleUserActivity, { passive: true });
+    window.addEventListener('keydown', handleUserActivity, { passive: true });
+    window.addEventListener('touchstart', handleUserActivity, { passive: true });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handlePageHide);
+    window.addEventListener('pagehide', handlePageHide);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+      window.removeEventListener('mousemove', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('touchstart', handleUserActivity);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handlePageHide);
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, [user?.uid]);
 
   const handleShareDevSnippet = async (codeSnippet: {
     title: string;
@@ -285,6 +352,51 @@ const MainAppContent: React.FC = () => {
       try {
         localStorage.setItem('litenote_cache_conversations', JSON.stringify(convs));
       } catch (e) {}
+
+      // Secondary check: detect if any conversation received a new message from someone else
+      convs.forEach((c) => {
+        const lastMsg = c.lastMessage;
+        if (
+          lastMsg &&
+          lastMsg.senderId !== user.uid &&
+          lastMsg.createdAt &&
+          lastMsg.createdAt > appSessionStartTimeRef.current
+        ) {
+          const prevNotifiedTime = notifiedConvLastMsgRef.current[c.id] || 0;
+          if (lastMsg.createdAt > prevNotifiedTime) {
+            notifiedConvLastMsgRef.current[c.id] = lastMsg.createdAt;
+
+            // Check if user is already actively watching this chat
+            const isDocumentVisible = typeof document !== 'undefined' && !document.hidden;
+            const currentViewingId = selectedConvIdRef.current;
+            const isActivelyInThisChat =
+              isDocumentVisible &&
+              activeTabRef.current === 'messenger' &&
+              currentViewingId === c.id;
+
+            if (!isActivelyInThisChat) {
+              const chatTitle = c.name || lastMsg.senderName || 'LiteNote Сообщение';
+              pushLiveNotification({
+                title: chatTitle,
+                message: lastMsg.text || 'Новое сообщение',
+                type: 'message',
+                avatarUrl: c.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${lastMsg.senderId}`,
+                tag: `chat_${c.id}`,
+                renotify: true,
+                data: {
+                  convId: c.id,
+                  type: 'message',
+                },
+                actions: [{ action: 'open', title: '💬 Ответить' }],
+                onClick: () => {
+                  setActiveTab('messenger');
+                  setSelectedConvId(c.id);
+                },
+              });
+            }
+          }
+        }
+      });
     });
 
     const unsubFriends = subscribeFriendships(user.uid, (friends) => {

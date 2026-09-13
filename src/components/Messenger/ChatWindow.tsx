@@ -209,7 +209,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       : conversation.name || liveOther?.displayName || 'Чат';
 
   const activeTypingEntries = Object.entries(conversation.typingUsers || {}).filter(
-    ([uid, info]) => uid !== user?.uid && info && Date.now() - info.timestamp < 6000
+    ([uid, info]) => uid !== user?.uid && info && Date.now() - info.timestamp < 4500
   );
   const activeTypingName = activeTypingEntries.length > 0 ? activeTypingEntries[0][1].userName : null;
 
