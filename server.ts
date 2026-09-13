@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
@@ -578,6 +579,49 @@ ${code || '// empty code'}
       res.json({
         result: `### 💡 AI Code Assist Report\n\nКод успешно проанализирован. Алгоритмическая структура валидна и готова к интеграции.\n\n\`\`\`${language}\n${code}\n\`\`\``,
       });
+    }
+  });
+
+  // Dedicated Video Streamer with HTTP 206 Partial Content (Range Support) for external domains & mobile Safari
+  app.get(["/intro.mp4", "/intro-video.mp4", "/video_2026-09-13_15-25-20.mp4"], (req, res) => {
+    const possiblePaths = [
+      path.join(process.cwd(), "public", "intro.mp4"),
+      path.join(process.cwd(), "public", "intro-video.mp4"),
+      path.join(process.cwd(), "public", "intro.mp4", "video_2026-09-13_15-25-20.mp4"),
+      path.join(process.cwd(), "dist", "intro.mp4"),
+      path.join(process.cwd(), "dist", "intro-video.mp4"),
+    ];
+
+    const filePath = possiblePaths.find((p) => fs.existsSync(p));
+    if (!filePath) {
+      return res.status(404).send("Intro video not found");
+    }
+
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Accept-Ranges", "bytes");
+
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = end - start + 1;
+      const file = fs.createReadStream(filePath, { start, end });
+      res.writeHead(206, {
+        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+        "Content-Length": chunksize,
+        "Content-Type": "video/mp4",
+      });
+      file.pipe(res);
+    } else {
+      res.writeHead(200, {
+        "Content-Length": fileSize,
+        "Content-Type": "video/mp4",
+      });
+      fs.createReadStream(filePath).pipe(res);
     }
   });
 
