@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { translations } from '../../lib/i18n';
 import { THEME_CONFIGS } from '../../lib/theme';
 import { UserProfile, Friendship, Follow } from '../../types';
+import { isUserOnline } from '../../lib/firebase';
 import { CreatorBadge, CoFounderBadge, VerifiedCheck } from '../Common/CreatorBadge';
 import { isCreatorAccount, isCoFounderAccount } from '../../lib/creator';
 import { getCleanAvatarUrl } from '../../lib/avatar';
@@ -537,12 +538,15 @@ export const PeopleDirectory: React.FC<PeopleDirectoryProps> = ({
                       />
                       <span
                         className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#0C121E] ${
-                          target.status === 'online'
+                          isOwn || isUserOnline(target)
                             ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]'
-                            : target.status === 'busy'
-                            ? 'bg-rose-500'
-                            : 'bg-amber-400'
+                            : 'bg-slate-600'
                         }`}
+                        title={
+                          isOwn || isUserOnline(target)
+                            ? (language === 'ru' ? 'В сети' : 'Online')
+                            : (language === 'ru' ? 'Не в сети' : 'Offline')
+                        }
                       />
                     </div>
                   </div>

@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { translations } from '../../lib/i18n';
 import { THEME_CONFIGS } from '../../lib/theme';
 import { UserProfile, Post, Comment, Friendship, Follow } from '../../types';
+import { isUserOnline } from '../../lib/firebase';
 import { PostCard } from '../Feed/PostCard';
 import { EditProfileModal } from './EditProfileModal';
 import { CreatorBadge, VerifiedCheck } from '../Common/CreatorBadge';
@@ -168,13 +169,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
               <span
                 className={`absolute bottom-1 right-1 w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full border-2 border-[#0A101C] ${
-                  effectiveUser.status === 'online'
+                  isOwnProfile || isUserOnline(effectiveUser)
                     ? 'bg-emerald-400 ring-2 ring-emerald-500/20'
-                    : effectiveUser.status === 'busy'
-                    ? 'bg-rose-500'
-                    : 'bg-amber-400'
+                    : 'bg-slate-600'
                 }`}
-                title={`Status: ${effectiveUser.status}`}
+                title={
+                  isOwnProfile || isUserOnline(effectiveUser)
+                    ? (language === 'ru' ? 'В сети' : 'Online')
+                    : (language === 'ru' ? 'Не в сети' : 'Offline')
+                }
               />
             </div>
 

@@ -1,6 +1,6 @@
 // LiteNote Service Worker for Background Push Notifications, Calling, and full PWA installation
-const CACHE_NAME = 'litenote-pwa-v2';
-const STATIC_ASSETS = ['/', '/favicon.svg', '/manifest.webmanifest'];
+const CACHE_NAME = 'litenote-pwa-v3';
+const STATIC_ASSETS = ['/', '/favicon.svg', '/manifest.webmanifest', '/pwa-192x192.png'];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -27,8 +27,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Never intercept API routes or downloads
-  if (url.pathname.startsWith('/api/')) {
+  // Never intercept API routes, Firebase requests, or downloads
+  if (url.pathname.startsWith('/api/') || url.hostname.includes('firestore') || url.hostname.includes('googleapis')) {
     return;
   }
 
@@ -53,20 +53,36 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// Rich Notification Click & Action Handlers (Telegram / Discord Style)
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const urlToOpen = event.notification.data?.url || '/';
+  const notifData = event.notification.data || {};
+  const urlToOpen = notifData.url || '/';
+  const action = event.action;
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // If a LiteNote tab is already open, focus it and navigate
       for (const client of windowClients) {
-        if (client.url && 'focus' in client) {
+        if ('focus' in client) {
+          client.postMessage({
+            type: 'NOTIFICATION_CLICK',
+            action,
+            data: notifData,
+          });
           return client.focus();
         }
       }
+      // If no tab is open, open a new window
       if (self.clients.openWindow) {
         return self.clients.openWindow(urlToOpen);
       }
     })
   );
 });
+
+// Notification Close Handler
+self.addEventListener('notificationclose', (event) => {
+  // Can be used for analytics or dismissing server-side badge
+});
+

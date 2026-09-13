@@ -6,7 +6,7 @@ import { Conversation, UserProfile } from '../../types';
 import { VerifiedCheck, CreatorBadge } from '../Common/CreatorBadge';
 import { isCreatorAccount } from '../../lib/creator';
 import { getCleanAvatarUrl } from '../../lib/avatar';
-import { togglePinConversationDoc } from '../../lib/firebase';
+import { togglePinConversationDoc, isUserOnline } from '../../lib/firebase';
 import { playTapSound } from '../../lib/audioEffects';
 import {
   MessageSquare,
@@ -154,16 +154,16 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     return getCleanAvatarUrl(conv.name || 'group');
   };
 
-  const getOtherStatus = (conv: Conversation) => {
-    if (!user) return 'offline';
+  const isOtherOnline = (conv: Conversation): boolean => {
+    if (!user) return false;
     const otherUid = conv.participants.find((p) => p !== user.uid);
     const liveOther = findLiveUser(otherUid);
-    if (liveOther?.status) return liveOther.status;
+    if (liveOther) return isUserOnline(liveOther);
 
     if (otherUid && conv.participantDetails && conv.participantDetails[otherUid]) {
-      return conv.participantDetails[otherUid].status || 'offline';
+      return isUserOnline(conv.participantDetails[otherUid]);
     }
-    return 'offline';
+    return false;
   };
 
   const getActiveTypingName = (conv: Conversation): string | null => {
@@ -340,7 +340,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             const isSelected = selectedConvId === conv.id;
             const title = getConvTitle(conv);
             const avatar = getConvAvatar(conv);
-            const status = getOtherStatus(conv);
+            const isOnline = isOtherOnline(conv);
             const otherUser = getOtherUser(conv);
             const isOtherCreator = otherUser ? isCreatorAccount(otherUser) : false;
             const unread = user && conv.unreadCount ? conv.unreadCount[user.uid] || 0 : 0;
@@ -390,12 +390,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                   {conv.type !== 'ai_bot' && (
                     <span
                       className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#080B14] ${
-                        status === 'online'
-                          ? 'bg-emerald-400'
-                          : status === 'busy'
-                          ? 'bg-rose-500'
-                          : 'bg-slate-600'
+                        isOnline ? 'bg-emerald-400 ring-1 ring-emerald-500/30' : 'bg-slate-600'
                       }`}
+                      title={isOnline ? (language === 'ru' ? 'В сети' : 'Online') : (language === 'ru' ? 'Не в сети' : 'Offline')}
                     />
                   )}
                 </div>

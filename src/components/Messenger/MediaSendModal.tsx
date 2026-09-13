@@ -138,9 +138,9 @@ export const MediaSendModal: React.FC<MediaSendModalProps> = ({
       if (mediaType === 'image') {
         // High-performance client-side image compression
         const compressed = await compressImageFile(file, {
-          maxWidth: 1600,
-          maxHeight: 1600,
-          quality: 0.82,
+          maxWidth: 1400,
+          maxHeight: 1400,
+          quality: 0.78,
           mimeType: 'image/webp',
         });
 
@@ -154,8 +154,8 @@ export const MediaSendModal: React.FC<MediaSendModalProps> = ({
           posterUrl: compressed.dataUrl,
         });
       } else {
-        if (file.size > 30 * 1024 * 1024) {
-          alert('Видео превышает 30 МБ. Пожалуйста, выберите файл меньшего размера для стабильной отправки.');
+        if (file.size > 25 * 1024 * 1024) {
+          alert('Видео превышает лимит 25 МБ. Пожалуйста, выберите более короткое видео или меньший файл для быстрой отправки.');
           setIsSending(false);
           setSendStage('idle');
           return;

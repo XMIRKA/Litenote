@@ -358,7 +358,7 @@ export async function createOrGetConversation(conv: Conversation): Promise<strin
   }
 }
 
-const CHUNK_SIZE = 200000;
+const CHUNK_SIZE = 450000;
 const mediaCache = new Map<string, string>();
 
 function getSessionCachedMedia(msgId: string): string | null {
@@ -476,8 +476,8 @@ export async function sendMessageDoc(convId: string, message: Message): Promise<
   const path = `conversations/${convId}/messages/${message.id}`;
   try {
     const rawMedia = message.mediaUrl || '';
-    // If rawMedia is longer than 200k chars, chunk it to stay well within Firestore doc limits
-    const shouldChunk = rawMedia.length > 200000;
+    // If rawMedia is longer than 400k chars, chunk it to stay well within Firestore doc limits
+    const shouldChunk = rawMedia.length > 400000;
 
     let mediaUrlToStore = rawMedia;
     let isChunked = false;
@@ -497,15 +497,20 @@ export async function sendMessageDoc(convId: string, message: Message): Promise<
       totalChunks = chunks.length;
       mediaUrlToStore = ''; // Main document remains compact and lightweight
 
-      // Write chunks in controlled batches
+      // Write chunks in controlled parallel batches of 6
       try {
-        const chunkWrites = chunks.map((chunk, index) =>
-          setDoc(
-            doc(db, 'conversations', convId, 'messages', message.id, 'chunks', `chunk_${index}`),
-            { index, chunk }
-          )
-        );
-        await Promise.all(chunkWrites);
+        const batchSize = 6;
+        for (let b = 0; b < chunks.length; b += batchSize) {
+          const slice = chunks.slice(b, b + batchSize);
+          await Promise.all(
+            slice.map((chunk, idx) =>
+              setDoc(
+                doc(db, 'conversations', convId, 'messages', message.id, 'chunks', `chunk_${b + idx}`),
+                { index: b + idx, chunk }
+              )
+            )
+          );
+        }
       } catch (chunkErr) {
         console.warn('Chunk write warning:', chunkErr);
       }
@@ -674,10 +679,23 @@ export async function setTypingStatusDoc(
     if (isTyping) {
       await updateDoc(convRef, {
         [`typingUsers.${userId}`]: {
-          userName,
+          userName: userName || 'Пользователь',
           timestamp: Date.now(),
         },
-      }).catch(() => {});
+      }).catch(async () => {
+        await setDoc(
+          convRef,
+          {
+            typingUsers: {
+              [userId]: {
+                userName: userName || 'Пользователь',
+                timestamp: Date.now(),
+              },
+            },
+          },
+          { merge: true }
+        ).catch(() => {});
+      });
     } else {
       await updateDoc(convRef, {
         [`typingUsers.${userId}`]: deleteField(),
@@ -1250,31 +1268,48 @@ export interface ActiveSession {
   device?: string;
 }
 
-export async function updateUserPresence(user: UserProfile): Promise<void> {
+export function isUserOnline(u?: { status?: string; lastActiveAt?: number } | null): boolean {
+  if (!u) return false;
+  if (u.status === 'offline') return false;
+  if (u.lastActiveAt && typeof u.lastActiveAt === 'number') {
+    return Date.now() - u.lastActiveAt < 55000;
+  }
+  return false;
+}
+
+export async function updateUserPresence(user: UserProfile, isOnline: boolean = true): Promise<void> {
   if (!user?.uid) return;
-  const path = `sessions/${user.uid}`;
+  const now = Date.now();
   try {
-    const sessionData: ActiveSession = {
-      uid: user.uid,
-      displayName: user.displayName || 'User',
-      handle: user.handle || 'user',
-      avatarUrl: user.avatarUrl || '',
-      lastActiveAt: Date.now(),
-      device: typeof navigator !== 'undefined' ? (navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop') : 'Web',
-    };
-    await setDoc(doc(db, 'sessions', user.uid), sessionData, { merge: true });
-    // Also record daily traffic aggregation
-    const today = new Date().toISOString().split('T')[0];
-    await setDoc(
-      doc(db, 'analytics', `traffic_${today}`),
-      {
-        date: today,
-        timestamp: Date.now(),
-        lastPing: Date.now(),
-        totalVisits: increment(1),
-      },
-      { merge: true }
-    ).catch(() => {});
+    // 1. Live status on user profile document
+    await updateDoc(doc(db, 'users', user.uid), {
+      status: isOnline ? 'online' : 'offline',
+      lastActiveAt: now,
+    }).catch(() => {});
+
+    if (isOnline) {
+      const sessionData: ActiveSession = {
+        uid: user.uid,
+        displayName: user.displayName || 'User',
+        handle: user.handle || 'user',
+        avatarUrl: user.avatarUrl || '',
+        lastActiveAt: now,
+        device: typeof navigator !== 'undefined' ? (navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop') : 'Web',
+      };
+      await setDoc(doc(db, 'sessions', user.uid), sessionData, { merge: true }).catch(() => {});
+      // Also record daily traffic aggregation
+      const today = new Date().toISOString().split('T')[0];
+      await setDoc(
+        doc(db, 'analytics', `traffic_${today}`),
+        {
+          date: today,
+          timestamp: now,
+          lastPing: now,
+          totalVisits: increment(1),
+        },
+        { merge: true }
+      ).catch(() => {});
+    }
   } catch (error) {
     // Non-blocking for presence
     console.warn('Presence sync:', error);
@@ -1579,17 +1614,26 @@ export async function addCallCandidateDoc(
   candidate: RTCIceCandidateInit,
   isCaller: boolean
 ): Promise<void> {
-  const path = `calls/${callId}`;
+  if (!callId || !candidate || !candidate.candidate) return;
   try {
     const field = isCaller ? 'callerCandidates' : 'calleeCandidates';
-    const plainCandidate = {
+    const plainCandidate: any = {
       candidate: candidate.candidate,
-      sdpMid: candidate.sdpMid,
-      sdpMLineIndex: candidate.sdpMLineIndex,
     };
-    await updateDoc(doc(db, 'calls', callId), {
-      [field]: arrayUnion(plainCandidate),
-    });
+    if (candidate.sdpMid !== undefined && candidate.sdpMid !== null) {
+      plainCandidate.sdpMid = candidate.sdpMid;
+    }
+    if (candidate.sdpMLineIndex !== undefined && candidate.sdpMLineIndex !== null) {
+      plainCandidate.sdpMLineIndex = candidate.sdpMLineIndex;
+    }
+    const callRef = doc(db, 'calls', callId);
+    await setDoc(
+      callRef,
+      {
+        [field]: arrayUnion(plainCandidate),
+      },
+      { merge: true }
+    );
   } catch (error) {
     // Non-blocking for candidate exchange
     console.warn('Candidate add error:', error);

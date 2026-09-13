@@ -64,12 +64,6 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     setActiveTab(tabId);
   };
 
-  const cycleStatus = () => {
-    if (!user) return;
-    const nextStatus = user.status === 'online' ? 'busy' : user.status === 'busy' ? 'idle' : 'online';
-    updateProfileData({ status: nextStatus });
-  };
-
   return (
     <>
       {/* Desktop Sidebar (Hidden on mobile) */}
@@ -165,13 +159,13 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
         {user && (
           <div className="pt-3 border-t border-[#142337]">
             <div
-              onClick={cycleStatus}
+              onClick={() => handleTabClick('profile')}
               className={`flex items-center gap-2.5 p-2 rounded-2xl border transition-all cursor-pointer ${
                 isCreator
                   ? 'bg-gradient-to-r from-[#141A29] to-[#1E1929] border-amber-500/30 hover:border-amber-500/60 shadow-sm'
                   : 'bg-[#0C1424] border-[#182A40] hover:border-emerald-500/40'
               }`}
-              title={language === 'ru' ? 'Нажмите для смены статуса (в сети / занят / отошел)' : 'Click to toggle status'}
+              title={language === 'ru' ? 'Мой профиль' : 'My Profile'}
             >
               <div className="relative shrink-0">
                 <img
@@ -181,15 +175,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
                     isCreator ? 'border-2 border-amber-400/80 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : 'border border-emerald-500/50'
                   }`}
                 />
-                <span
-                  className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0E1526] ${
-                    user.status === 'online'
-                      ? 'bg-emerald-400'
-                      : user.status === 'busy'
-                      ? 'bg-rose-500'
-                      : 'bg-amber-400'
-                  }`}
-                />
+                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#0E1526] bg-emerald-400" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1">

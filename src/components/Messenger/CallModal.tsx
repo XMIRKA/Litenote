@@ -250,15 +250,15 @@ export const CallModal: React.FC<CallModalProps> = ({
       try {
         await refreshDevices();
 
-        // 1. Capture Ultra High Definition Local Media
+        // 1. Capture Local Audio & Video Media with resilient fallback
         let stream: MediaStream | null = null;
         try {
           if (callSession.callType === 'video') {
             stream = await navigator.mediaDevices.getUserMedia({
               video: {
-                width: { ideal: 1920, min: 1280, max: 1920 },
-                height: { ideal: 1080, min: 720, max: 1080 },
-                frameRate: { ideal: 30, max: 60 },
+                width: { ideal: 1280, max: 1920 },
+                height: { ideal: 720, max: 1080 },
+                frameRate: { ideal: 30, max: 30 },
                 facingMode: cameraFacing,
                 deviceId: selectedVideoId ? { exact: selectedVideoId } : undefined,
               },
@@ -266,8 +266,6 @@ export const CallModal: React.FC<CallModalProps> = ({
                 echoCancellation: true,
                 noiseSuppression: true,
                 autoGainControl: true,
-                channelCount: 2,
-                sampleRate: 48000,
                 deviceId: selectedAudioId ? { exact: selectedAudioId } : undefined,
               },
             });
@@ -278,17 +276,15 @@ export const CallModal: React.FC<CallModalProps> = ({
                 echoCancellation: true,
                 noiseSuppression: true,
                 autoGainControl: true,
-                channelCount: 2,
-                sampleRate: 48000,
                 deviceId: selectedAudioId ? { exact: selectedAudioId } : undefined,
               },
             });
           }
         } catch (err) {
-          console.warn('Ultra HD capture fallback to standard HD resolution:', err);
+          console.warn('Initial media capture fallback to standard audio/video:', err);
           try {
             stream = await navigator.mediaDevices.getUserMedia({
-              video: callSession.callType === 'video' ? { width: { ideal: 1280 }, height: { ideal: 720 } } : false,
+              video: callSession.callType === 'video' ? true : false,
               audio: true,
             });
           } catch (err2) {
@@ -330,6 +326,18 @@ export const CallModal: React.FC<CallModalProps> = ({
         // Reset queued candidates
         queuedCandidatesRef.current = [];
 
+        // Connection state tracking
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            setCallStatus('connected');
+          }
+        };
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === 'connected') {
+            setCallStatus('connected');
+          }
+        };
+
         // Add local tracks
         if (stream) {
           stream.getTracks().forEach((track) => {
@@ -368,7 +376,7 @@ export const CallModal: React.FC<CallModalProps> = ({
 
           if (remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = remoteStreamRef.current;
-            remoteVideoRef.current.muted = true; // Dedicated audio element handles high bitrate sound
+            remoteVideoRef.current.muted = true;
             remoteVideoRef.current.play().catch(() => {});
           }
         };
@@ -407,75 +415,10 @@ export const CallModal: React.FC<CallModalProps> = ({
           }
         };
 
-        // 3. Caller vs Callee Flow
-        if (isCaller) {
-          const isGroupCall =
-            callSession.isGroupCall ||
-            (callSession.participants && callSession.participants.length > 2) ||
-            Boolean(recipient?.uid && recipient.uid.startsWith('group_'));
-
-          const isRecipientOnline = isGroupCall
-            ? true
-            : recipient && 'status' in recipient
-            ? (recipient as any).status !== 'offline'
-            : true;
-
-          if (!isRecipientOnline) {
-            setCallStatus('missed');
-            setStatusMessage(
-              language === 'ru'
-                ? 'Пользователя нет на сайте. Звонок можно поднять только когда он в сети.'
-                : 'User is not on the site. Calls can only be answered while active.'
-            );
-            playChime('busy');
-            setTimeout(() => {
-              cleanupAndClose(0, 'missed');
-            }, 3000);
-            return;
-          }
-
-          setCallStatus('dialing');
-          startOutgoingTone();
-
-          // Generate Offer
-          const offer = await pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: true,
-          });
-          await pc.setLocalDescription(offer);
-
-          // Save call with offer to Firestore
-          const initialCallDoc: CallSession = {
-            ...callSession,
-            offer: {
-              type: offer.type,
-              sdp: offer.sdp || '',
-            },
-            status: 'ringing',
-            startedAt: Date.now(),
-          };
-          await createCallDoc(initialCallDoc);
-
-          // 35s timeout for unanswered call
-          dialTimeoutRef.current = setTimeout(async () => {
-            if (peerConnectionRef.current && peerConnectionRef.current.connectionState !== 'connected') {
-              stopOutgoingTone();
-              playChime('busy');
-              setCallStatus('missed');
-              setStatusMessage(language === 'ru' ? 'Абонент не отвечает' : 'No answer');
-              await updateCallDoc(callSession.id, { status: 'missed', endedAt: Date.now() });
-              setTimeout(() => {
-                onClose(0, callSession.callType, 'missed');
-              }, 2000);
-            }
-          }, 35000);
-
-        } else {
-          // Callee branch
-          setCallStatus('connecting');
-
-          if (callSession.offer) {
-            await pc.setRemoteDescription(new RTCSessionDescription(callSession.offer as RTCSessionDescriptionInit));
+        const handleOffer = async (offerData: { type: any; sdp: string }) => {
+          if (!pc || pc.currentRemoteDescription || pc.remoteDescription) return;
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(offerData as RTCSessionDescriptionInit));
             await flushQueuedCandidates();
 
             const answer = await pc.createAnswer();
@@ -499,12 +442,66 @@ export const CallModal: React.FC<CallModalProps> = ({
 
             playChime('connected');
             setCallStatus('connected');
+          } catch (err) {
+            console.error('Callee handle offer error:', err);
+          }
+        };
+
+        // 3. Caller vs Callee Flow
+        if (isCaller) {
+          setCallStatus('dialing');
+          startOutgoingTone();
+
+          // Generate Offer
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: true,
+          });
+          await pc.setLocalDescription(offer);
+
+          // Save call with offer to Firestore
+          const initialCallDoc: CallSession = {
+            ...callSession,
+            offer: {
+              type: offer.type,
+              sdp: offer.sdp || '',
+            },
+            status: 'ringing',
+            startedAt: Date.now(),
+          };
+          await createCallDoc(initialCallDoc);
+
+          // 45s timeout for unanswered call
+          dialTimeoutRef.current = setTimeout(async () => {
+            if (peerConnectionRef.current && peerConnectionRef.current.connectionState !== 'connected') {
+              stopOutgoingTone();
+              playChime('busy');
+              setCallStatus('missed');
+              setStatusMessage(language === 'ru' ? 'Абонент не отвечает' : 'No answer');
+              await updateCallDoc(callSession.id, { status: 'missed', endedAt: Date.now() });
+              setTimeout(() => {
+                onClose(0, callSession.callType, 'missed');
+              }, 2000);
+            }
+          }, 45000);
+
+        } else {
+          // Callee branch
+          setCallStatus('connecting');
+
+          if (callSession.offer) {
+            await handleOffer(callSession.offer as any);
           }
         }
 
         // 4. Subscribe to Real-Time Updates
         const unsubscribe = subscribeActiveCall(callSession.id, async (docSnap) => {
           if (!docSnap || !isMounted) return;
+
+          // If callee and offer arrived late via subscription
+          if (!isCaller && docSnap.offer && !pc.currentRemoteDescription && !pc.remoteDescription) {
+            await handleOffer(docSnap.offer as any);
+          }
 
           if (isCaller && docSnap.calleeCandidates) {
             const startIdx = candidateIndexMapRef.current.callee;

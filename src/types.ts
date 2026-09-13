@@ -322,8 +322,9 @@ export interface NotificationItem {
   actorName?: string;
   actorAvatar?: string;
   title?: string;
-  type: 'friend_request' | 'friend_accepted' | 'post_reaction' | 'reaction' | 'comment' | 'mention' | 'new_message' | 'message' | 'system';
+  type: 'friend_request' | 'friend_accepted' | 'post_reaction' | 'reaction' | 'comment' | 'mention' | 'new_message' | 'message' | 'call' | 'system';
   message: string;
+  imageUrl?: string;
   referenceId?: string;
   postId?: string;
   read: boolean;

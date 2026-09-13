@@ -10,6 +10,7 @@ import { MediaViewerModal } from './MediaViewerModal';
 import { CreatorBadge, VerifiedCheck } from '../Common/CreatorBadge';
 import { isCreatorAccount } from '../../lib/creator';
 import { getCleanAvatarUrl } from '../../lib/avatar';
+import { isUserOnline } from '../../lib/firebase';
 import { GroupSettingsModal } from './GroupSettingsModal';
 import {
   Send,
@@ -193,25 +194,37 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const isOtherCreator = liveOther ? isCreatorAccount(liveOther) : false;
 
+  // Real-time presence & typing evaluation ticker (every 1.5s)
+  const [, setPresenceTicker] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setPresenceTicker((v) => v + 1);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, []);
+
   const chatTitle =
     conversation.type === 'ai_bot'
       ? 'Litenote AI'
       : conversation.name || liveOther?.displayName || 'Чат';
 
   const activeTypingEntries = Object.entries(conversation.typingUsers || {}).filter(
-    ([uid, info]) => uid !== user?.uid && Date.now() - info.timestamp < 5000
+    ([uid, info]) => uid !== user?.uid && info && Date.now() - info.timestamp < 6000
   );
   const activeTypingName = activeTypingEntries.length > 0 ? activeTypingEntries[0][1].userName : null;
 
+  const isOtherUserOnline = liveOther ? isUserOnline(liveOther) : false;
+
   const chatSubtitle = activeTypingName ? (
-    <span className="text-emerald-400 font-medium animate-pulse">
+    <span className="text-emerald-400 font-medium animate-pulse flex items-center gap-1">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
       {activeTypingName} {language === 'ru' ? 'печатает...' : 'is typing...'}
     </span>
   ) : conversation.type === 'ai_bot' ? (
-    language === 'ru' ? 'Всесторонний собеседник • Онлайн' : 'All-around Companion • Online'
+    language === 'ru' ? 'Всесторонний собеседник • В сети' : 'All-around Companion • Online'
   ) : liveOther ? (
     `@${liveOther.handle} • ${
-      liveOther.status === 'online' || (liveOther.lastActiveAt && Date.now() - liveOther.lastActiveAt < 45000)
+      isOtherUserOnline
         ? language === 'ru'
           ? 'В сети'
           : 'Online'
@@ -220,7 +233,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         : 'Offline'
     }`
   ) : (
-    'Зашифрованный диалог'
+    language === 'ru' ? 'Зашифрованный диалог' : 'Encrypted chat'
   );
 
   // Search filtering
@@ -455,12 +468,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 />
                 <span
                   className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#080B14] ${
-                    liveOther?.status === 'online'
-                      ? 'bg-emerald-400'
-                      : liveOther?.status === 'busy'
-                      ? 'bg-rose-500'
+                    isOtherUserOnline
+                      ? 'bg-emerald-400 ring-1 ring-emerald-500/30'
                       : 'bg-slate-600'
                   }`}
+                  title={isOtherUserOnline ? (language === 'ru' ? 'В сети' : 'Online') : (language === 'ru' ? 'Не в сети' : 'Offline')}
                 />
               </div>
             )}
@@ -760,6 +772,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         ) : (
           renderMessagesWithDateHeaders()
+        )}
+
+        {/* Real-time Typing Bubble for other users */}
+        {!isAiThinking && activeTypingName && (
+          <div className="flex items-center gap-2 p-2 px-3 rounded-2xl bg-[#0F172A]/90 border border-emerald-500/30 text-xs text-slate-200 w-fit animate-in fade-in shadow-md">
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span className="font-medium text-emerald-400">
+              {activeTypingName} {language === 'ru' ? 'печатает...' : 'is typing...'}
+            </span>
+          </div>
         )}
 
         {/* AI Typing Indicator */}

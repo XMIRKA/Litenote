@@ -306,23 +306,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Presence heartbeat interval
   useEffect(() => {
     if (!user?.uid) return;
-    updateUserPresence(user).catch(() => {});
+    updateUserPresence(user, true).catch(() => {});
     const interval = setInterval(() => {
-      updateUserPresence(user).catch(() => {});
-    }, 20000);
+      if (document.visibilityState === 'visible') {
+        updateUserPresence(user, true).catch(() => {});
+      }
+    }, 15000);
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        updateUserPresence(user).catch(() => {});
+        updateUserPresence(user, true).catch(() => {});
       }
     };
+
+    const handleUnload = () => {
+      if (user?.uid) {
+        updateUserPresence(user, false).catch(() => {});
+      }
+    };
+
     window.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('focus', handleVisibility);
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
 
     return () => {
       clearInterval(interval);
       window.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('focus', handleVisibility);
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
     };
   }, [user?.uid]);
 
@@ -618,6 +631,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
+    if (user?.uid) {
+      await updateUserPresence(user, false).catch(() => {});
+    }
     if (unsubUserDocRef.current) {
       unsubUserDocRef.current();
       unsubUserDocRef.current = null;

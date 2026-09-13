@@ -309,15 +309,7 @@ export const Header: React.FC<HeaderProps> = ({
                     isCreator ? 'border-2 border-amber-400/80 shadow-[0_0_8px_rgba(245,158,11,0.3)]' : 'border border-emerald-500/50'
                   }`}
                 />
-                <span
-                  className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-[#0E1526] ${
-                    user.status === 'online'
-                      ? 'bg-emerald-400'
-                      : user.status === 'busy'
-                      ? 'bg-rose-500'
-                      : 'bg-amber-400'
-                  }`}
-                />
+                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-[#0E1526] bg-emerald-400" />
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block mr-1" />
             </button>

@@ -30,41 +30,32 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
         if (!ctx || ctx.state === 'closed') return;
         try {
           const now = ctx.currentTime;
-          // Dual frequency phone ring tone (440Hz + 480Hz standard)
-          const osc1 = ctx.createOscillator();
-          const osc2 = ctx.createOscillator();
-          const gain = ctx.createGain();
+          // Modern gentle acoustic melody chord (E5, G#5, B5)
+          const freqs = [659.25, 830.61, 987.77];
+          freqs.forEach((freq, idx) => {
+            if (!ctx) return;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
 
-          osc1.type = 'sine';
-          osc2.type = 'sine';
-          osc1.frequency.setValueAtTime(440, now);
-          osc2.frequency.setValueAtTime(480, now);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.12);
 
-          // Pulse 1
-          gain.gain.setValueAtTime(0, now);
-          gain.gain.linearRampToValueAtTime(0.12, now + 0.05);
-          gain.gain.setValueAtTime(0.12, now + 0.8);
-          gain.gain.linearRampToValueAtTime(0, now + 0.85);
+            const startT = now + idx * 0.12;
+            gain.gain.setValueAtTime(0, startT);
+            gain.gain.linearRampToValueAtTime(0.04, startT + 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.001, startT + 0.6);
 
-          // Pulse 2
-          gain.gain.setValueAtTime(0, now + 1.1);
-          gain.gain.linearRampToValueAtTime(0.12, now + 1.15);
-          gain.gain.setValueAtTime(0.12, now + 1.95);
-          gain.gain.linearRampToValueAtTime(0, now + 2.0);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
 
-          osc1.connect(gain);
-          osc2.connect(gain);
-          gain.connect(ctx.destination);
-
-          osc1.start(now);
-          osc2.start(now);
-          osc1.stop(now + 2.1);
-          osc2.stop(now + 2.1);
+            osc.start(startT);
+            osc.stop(startT + 0.65);
+          });
         } catch (e) {}
       };
 
       playRingChime();
-      ringtoneIntervalRef.current = setInterval(playRingChime, 3800);
+      ringtoneIntervalRef.current = setInterval(playRingChime, 3000);
     } catch (e) {
       console.warn('Web Audio incoming ringtone initialization:', e);
     }

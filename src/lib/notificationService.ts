@@ -6,8 +6,19 @@ export interface InAppToast {
   message: string;
   type?: 'message' | 'friend_request' | 'reaction' | 'comment' | 'system' | 'call';
   avatarUrl?: string;
+  imageUrl?: string;
   createdAt: number;
   onClick?: () => void;
+}
+
+export interface DesktopNotificationOptions {
+  requireInteraction?: boolean;
+  tag?: string;
+  renotify?: boolean;
+  image?: string;
+  badge?: string;
+  actions?: Array<{ action: string; title: string; icon?: string }>;
+  data?: any;
 }
 
 type ToastListener = (toasts: InAppToast[]) => void;
@@ -16,8 +27,31 @@ const listeners: Set<ToastListener> = new Set();
 let swRegistration: ServiceWorkerRegistration | null = null;
 let titleBlinkInterval: any = null;
 let originalDocumentTitle = typeof document !== 'undefined' ? document.title : 'LiteNote';
+let notificationClickHandlers: Array<(data: any) => void> = [];
 
-// Initialize Service Worker and tab visibility handlers
+// Helper to generate a crisp high-res stylized avatar if none is present
+export function getNotificationAvatar(avatarUrl?: string, name?: string): string {
+  if (avatarUrl && avatarUrl.trim() && !avatarUrl.includes('placeholder')) {
+    return avatarUrl;
+  }
+  const cleanName = encodeURIComponent(name || 'LiteNote');
+  return `https://ui-avatars.com/api/?name=${cleanName}&background=4f46e5&color=ffffff&bold=true&size=256`;
+}
+
+// Clean up markdown & special formatting from body string for clean system notifications
+export function cleanNotificationBody(text?: string): string {
+  if (!text) return '';
+  return text
+    .replace(/!\[.*?\]\(.*?\)/g, '📷 [Изображение]')
+    .replace(/\[.*?\]\(.*?\)/g, '$1')
+    .replace(/```[\s\S]*?```/g, '📄 [Код]')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/[*_~#]/g, '')
+    .trim()
+    .substring(0, 140);
+}
+
+// Initialize Service Worker, tab visibility handlers, and postMessage communication
 export async function initNotificationService() {
   if (typeof window === 'undefined') return;
   originalDocumentTitle = document.title || 'LiteNote';
@@ -26,6 +60,12 @@ export async function initNotificationService() {
     try {
       const reg = await navigator.serviceWorker.register('/sw.js');
       swRegistration = reg;
+
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'NOTIFICATION_CLICK') {
+          notificationClickHandlers.forEach((handler) => handler(event.data.data));
+        }
+      });
     } catch (e) {
       console.warn('Service worker registration:', e);
     }
@@ -35,6 +75,13 @@ export async function initNotificationService() {
   window.addEventListener('focus', () => {
     stopTitleFlashing();
   });
+}
+
+export function onServiceWorkerNotificationClick(handler: (data: any) => void) {
+  notificationClickHandlers.push(handler);
+  return () => {
+    notificationClickHandlers = notificationClickHandlers.filter((h) => h !== handler);
+  };
 }
 
 export function startTitleFlashing(alertText: string) {
@@ -69,7 +116,15 @@ function notifyToastListeners() {
   listeners.forEach((fn) => fn([...activeToasts]));
 }
 
-// Request Browser Notifications Permission
+// Check notification permission state
+export function getNotificationPermission(): NotificationPermission | 'unsupported' {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return 'unsupported';
+  }
+  return Notification.permission;
+}
+
+// Request Browser Notifications Permission with resilient fallback
 export async function requestNotificationPermission(): Promise<boolean> {
   if (typeof window === 'undefined' || !('Notification' in window)) {
     return false;
@@ -88,82 +143,127 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return false;
 }
 
-// Play pleasant web audio chime
+// Play pleasant web audio chime (Apple / Telegram Style)
+let sharedAudioCtx: AudioContext | null = null;
 export function playNotificationSound() {
   try {
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+      sharedAudioCtx = new AudioContextClass();
+    }
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume().catch(() => {});
+    }
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    const ctx = sharedAudioCtx;
+    const now = ctx.currentTime;
 
-    osc.type = 'sine';
-    // Two-tone bright notification ping
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1); // A5
+    // Harmonic double chime (E5 -> A5)
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gainNode = ctx.createGain();
 
-    gain.gain.setValueAtTime(0.08, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+    osc1.type = 'sine';
+    osc2.type = 'sine';
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+    osc1.frequency.setValueAtTime(659.25, now); // E5
+    osc2.frequency.setValueAtTime(880.0, now + 0.08); // A5
 
-    osc.start();
-    osc.stop(ctx.currentTime + 0.45);
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(0.06, now + 0.03);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    osc1.connect(gainNode);
+    osc2.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    osc1.start(now);
+    osc1.stop(now + 0.12);
+    osc2.start(now + 0.08);
+    osc2.stop(now + 0.35);
   } catch {
-    // Web audio might be restricted before interaction
+    // Non-blocking for audio playback
   }
 }
 
-// Send Native Desktop Notification (even when tab is not focused or backgrounded)
+// Send Native Desktop Notification (Styled with avatar, badge, rich image, tag, and actions)
 export async function sendDesktopNotification(
   title: string,
-  body: string,
+  rawBody: string,
   icon?: string,
   onClick?: () => void,
-  options?: { requireInteraction?: boolean; tag?: string }
+  options?: DesktopNotificationOptions
 ) {
   if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') {
     return;
   }
 
-  const defaultIcon = icon || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=128&auto=format&fit=crop&q=80';
-  const defaultBadge = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=64&auto=format&fit=crop&q=80';
+  const cleanBody = cleanNotificationBody(rawBody);
+  const formattedTitle = title.includes('LiteNote') ? title : `${title} • LiteNote`;
+  const notificationIcon = getNotificationAvatar(icon, title);
+  const notificationBadge = '/favicon.svg';
 
-  // Flash title if document is hidden
-  if (document.hidden) {
+  // Flash title if document is in background
+  if (typeof document !== 'undefined' && document.hidden) {
     startTitleFlashing(`🔔 ${title}`);
   }
 
-  // Try Service Worker showNotification first (stronger background longevity)
-  if (swRegistration && 'showNotification' in swRegistration) {
-    try {
-      await swRegistration.showNotification(title, {
-        body,
-        icon: defaultIcon,
-        badge: defaultBadge,
-        tag: options?.tag || 'litenote-message',
-        requireInteraction: options?.requireInteraction || false,
-        vibrate: [200, 100, 200],
-        data: { url: window.location.href },
-      } as any);
-      return;
-    } catch (swErr) {
-      console.warn('SW notification fallback to window:', swErr);
+  // 1. Try Service Worker showNotification first (Full Rich Notification Support)
+  try {
+    let swReg = swRegistration;
+    if (!swReg && 'serviceWorker' in navigator) {
+      swReg = await navigator.serviceWorker.ready.catch(() => null);
     }
+
+    if (swReg && 'showNotification' in swReg) {
+      const swOptions: any = {
+        body: cleanBody || 'Новое оповещение',
+        icon: notificationIcon,
+        badge: notificationBadge,
+        tag: options?.tag || `litenote_${Date.now()}`,
+        renotify: options?.renotify !== undefined ? options?.renotify : Boolean(options?.tag),
+        requireInteraction: options?.requireInteraction || false,
+        vibrate: [120, 60, 120],
+        silent: false,
+        timestamp: Date.now(),
+        data: {
+          url: window.location.href,
+          ...(options?.data || {}),
+        },
+      };
+
+      if (options?.image) {
+        swOptions.image = options.image;
+      }
+
+      if (options?.actions && Array.isArray(options.actions)) {
+        swOptions.actions = options.actions;
+      }
+
+      await swReg.showNotification(formattedTitle, swOptions);
+      return;
+    }
+  } catch (swErr) {
+    console.warn('ServiceWorker desktop notification fallback to window:', swErr);
   }
 
-  // Standard window Notification fallback
+  // 2. Standard Window Notification Fallback
   try {
-    const notif = new Notification(title, {
-      body,
-      icon: defaultIcon,
-      badge: defaultBadge,
-      tag: options?.tag || 'litenote-alert',
+    const notifOptions: NotificationOptions = {
+      body: cleanBody || 'Новое оповещение',
+      icon: notificationIcon,
+      badge: notificationBadge,
+      tag: options?.tag || `litenote_${Date.now()}`,
       requireInteraction: options?.requireInteraction || false,
       silent: false,
-    });
+    };
+
+    if (options?.image && 'image' in Notification.prototype) {
+      (notifOptions as any).image = options.image;
+    }
+
+    const notif = new Notification(formattedTitle, notifOptions);
 
     notif.onclick = () => {
       window.focus();
@@ -172,7 +272,7 @@ export async function sendDesktopNotification(
       notif.close();
     };
   } catch (e) {
-    console.warn('Native notification dispatch failed:', e);
+    console.warn('Window notification dispatch failed:', e);
   }
 }
 
@@ -182,38 +282,58 @@ export function pushLiveNotification(params: {
   message: string;
   type?: InAppToast['type'];
   avatarUrl?: string;
+  imageUrl?: string;
   onClick?: () => void;
   requireInteraction?: boolean;
+  tag?: string;
+  renotify?: boolean;
+  skipSound?: boolean;
+  skipDesktop?: boolean;
+  skipInAppToast?: boolean;
+  actions?: Array<{ action: string; title: string }>;
+  data?: any;
 }) {
-  playNotificationSound();
+  if (!params.skipSound) {
+    playNotificationSound();
+  }
 
   // 1. Native Desktop notification
-  sendDesktopNotification(params.title, params.message, params.avatarUrl, params.onClick, {
-    requireInteraction: params.requireInteraction,
-  });
+  if (!params.skipDesktop) {
+    sendDesktopNotification(params.title, params.message, params.avatarUrl, params.onClick, {
+      requireInteraction: params.requireInteraction,
+      tag: params.tag,
+      renotify: params.renotify,
+      image: params.imageUrl,
+      actions: params.actions,
+      data: params.data,
+    });
+  }
 
-  // 2. In-App Floating Toast
-  const newToast: InAppToast = {
-    id: `toast_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    title: params.title,
-    message: params.message,
-    type: params.type || 'system',
-    avatarUrl: params.avatarUrl,
-    createdAt: Date.now(),
-    onClick: () => {
-      stopTitleFlashing();
-      if (params.onClick) params.onClick();
-    },
-  };
+  // 2. In-App Floating Toast (Stylized modern card)
+  if (!params.skipInAppToast) {
+    const newToast: InAppToast = {
+      id: `toast_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      title: params.title,
+      message: cleanNotificationBody(params.message),
+      type: params.type || 'system',
+      avatarUrl: params.avatarUrl,
+      imageUrl: params.imageUrl,
+      createdAt: Date.now(),
+      onClick: () => {
+        stopTitleFlashing();
+        if (params.onClick) params.onClick();
+      },
+    };
 
-  activeToasts = [newToast, ...activeToasts].slice(0, 4); // Max 4 toasts simultaneously
-  notifyToastListeners();
-
-  // Auto remove in 5 seconds
-  setTimeout(() => {
-    activeToasts = activeToasts.filter((t) => t.id !== newToast.id);
+    activeToasts = [newToast, ...activeToasts].slice(0, 3); // Max 3 toasts simultaneously
     notifyToastListeners();
-  }, 5000);
+
+    // Auto remove in 5.5 seconds
+    setTimeout(() => {
+      activeToasts = activeToasts.filter((t) => t.id !== newToast.id);
+      notifyToastListeners();
+    }, 5500);
+  }
 }
 
 export function dismissToast(toastId: string) {

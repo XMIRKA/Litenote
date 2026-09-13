@@ -20,7 +20,13 @@ import { DevToolsModal } from './components/DevTools/DevToolsModal';
 import { NotificationToastContainer } from './components/Notifications/NotificationToastContainer';
 import { IncomingCallModal } from './components/Messenger/IncomingCallModal';
 import { CallModal } from './components/Messenger/CallModal';
-import { requestNotificationPermission, pushLiveNotification, initNotificationService } from './lib/notificationService';
+import {
+  requestNotificationPermission,
+  pushLiveNotification,
+  initNotificationService,
+  onServiceWorkerNotificationClick,
+  getNotificationPermission
+} from './lib/notificationService';
 import { AnimatePresence } from 'motion/react';
 
 import {
@@ -160,11 +166,14 @@ const MainAppContent: React.FC = () => {
 
   const prevNotifIdsRef = React.useRef<Set<string>>(new Set());
   const isInitialNotifLoadRef = React.useRef<boolean>(true);
+  const notifiedCallIdsRef = React.useRef<Set<string>>(new Set());
   const lastKnownMessageCountRef = React.useRef<Record<string, number>>({});
   const activeTabRef = React.useRef(activeTab);
   activeTabRef.current = activeTab;
   const selectedConvIdRef = React.useRef(selectedConvId);
   selectedConvIdRef.current = selectedConvId;
+  const conversationsRef = React.useRef(conversations);
+  conversationsRef.current = conversations;
 
   // Global Command Palette Shortcut (Cmd+K / Ctrl+K)
   useEffect(() => {
@@ -222,9 +231,20 @@ const MainAppContent: React.FC = () => {
     setShowSplash(false);
   };
 
-  // Initialize browser notification service & service worker
+  // Initialize browser notification service & service worker & click listener
   useEffect(() => {
     initNotificationService();
+    const unsubClick = onServiceWorkerNotificationClick((data) => {
+      if (data?.convId || data?.referenceId) {
+        setActiveTab('messenger');
+        setSelectedConvId(data.convId || data.referenceId);
+      } else if (data?.postId) {
+        setActiveTab('feed');
+      } else if (data?.type === 'friend_request' || data?.type === 'friend_accepted') {
+        setActiveTab('people');
+      }
+    });
+    return unsubClick;
   }, []);
 
   // 1. Subscribe to Global Posts
@@ -278,26 +298,62 @@ const MainAppContent: React.FC = () => {
     const unsubNotifs = subscribeNotifications(user.uid, (notifs) => {
       setNotifications(notifs);
 
-      // Trigger instant toast and desktop notification on newly arrived unread notifications
+      // On initial app load/login: do not pop up a stack of old notifications
+      // Instead, if there are unread notifications, display a single elegant summary reminder
       if (isInitialNotifLoadRef.current) {
         prevNotifIdsRef.current = new Set(notifs.map((n) => n.id));
         isInitialNotifLoadRef.current = false;
+
+        const unreadCount = notifs.filter((n) => !n.isRead && !(n as any).read).length;
+        if (unreadCount > 0) {
+          // Professional single consolidated reminder
+          const summaryMessage =
+            language === 'ru'
+              ? `У вас ${unreadCount} ${
+                  unreadCount === 1
+                    ? 'непрочитанное уведомление'
+                    : unreadCount < 5
+                    ? 'непрочитанных уведомления'
+                    : 'непрочитанных уведомлений'
+                }`
+              : `You have ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`;
+
+          pushLiveNotification({
+            title: language === 'ru' ? 'Центр уведомлений' : 'Notifications',
+            message: summaryMessage,
+            type: 'system',
+            skipSound: true, // Silent reminder on entry, no loud jarring sounds
+            skipDesktop: true, // Only inside app on entry
+            onClick: () => {
+              setIsNotificationsOpen(true);
+            },
+          });
+        }
         return;
       }
 
+      // When newly created notifications arrive in real-time
       notifs.forEach((item) => {
         if (!prevNotifIdsRef.current.has(item.id) && !item.isRead && !item.read) {
           prevNotifIdsRef.current.add(item.id);
 
           // Check if user is currently looking at this exact chat in the foreground
-          const isAppFocused = typeof document !== 'undefined' && !document.hidden && document.hasFocus();
+          const isAppVisible = typeof document !== 'undefined' && !document.hidden;
+          const currentViewingConvId =
+            selectedConvIdRef.current ||
+            (conversationsRef.current.length > 0 ? conversationsRef.current[0].id : null);
+
           const isActivelyViewingChat =
-            isAppFocused &&
+            isAppVisible &&
             activeTabRef.current === 'messenger' &&
-            Boolean(selectedConvIdRef.current) &&
+            Boolean(currentViewingConvId) &&
             (
-              (item.referenceId && item.referenceId === selectedConvIdRef.current) ||
-              (item.actorId && selectedConvIdRef.current.includes(item.actorId))
+              (item.referenceId && item.referenceId === currentViewingConvId) ||
+              (item.actorId && (
+                currentViewingConvId?.includes(item.actorId) ||
+                currentViewingConvId === `conv_${item.actorId}_${user.uid}` ||
+                currentViewingConvId === `conv_${user.uid}_${item.actorId}`
+              ))
             );
 
           if (isActivelyViewingChat) {
@@ -307,11 +363,29 @@ const MainAppContent: React.FC = () => {
           }
 
           // User is outside the app, on another tab/view, or in a different chat -> show live notification
+          const notifTag = item.referenceId
+            ? `chat_${item.referenceId}`
+            : item.postId
+            ? `post_${item.postId}`
+            : `notif_${item.id}`;
+
           pushLiveNotification({
             title: item.title || 'Новое уведомление в LiteNote',
             message: item.message,
             type: item.type as any,
             avatarUrl: item.actorAvatar,
+            imageUrl: item.imageUrl,
+            tag: notifTag,
+            renotify: true,
+            data: {
+              convId: item.referenceId,
+              postId: item.postId,
+              type: item.type,
+            },
+            actions:
+              item.type === 'message' || item.type === 'new_message'
+                ? [{ action: 'open', title: '💬 Ответить' }]
+                : undefined,
             onClick: () => {
               if (item.type === 'message' || item.type === 'new_message') {
                 setActiveTab('messenger');
@@ -389,7 +463,7 @@ const MainAppContent: React.FC = () => {
     return () => unsub();
   }, [selectedConvId, user?.uid]);
 
-  // 5. Subscribe to Incoming WebRTC Calls with Desktop Notification
+  // 5. Subscribe to Incoming WebRTC Calls with Controlled Desktop/Background Notification
   useEffect(() => {
     if (!user?.uid) return;
     const unsub = subscribeIncomingCalls(user.uid, (ringingCalls) => {
@@ -397,13 +471,29 @@ const MainAppContent: React.FC = () => {
         const call = ringingCalls[0];
         setIncomingCall(call);
 
-        // Push desktop / background notification for call
-        pushLiveNotification({
-          title: `Входящий ${call.callType === 'video' ? 'видеозвонок' : 'аудиозвонок'}!`,
-          message: `${call.callerName} (@${call.callerHandle}) звонит вам в LiteNote...`,
-          avatarUrl: call.callerAvatar,
-          type: 'call',
-        });
+        // Check if this specific call has already been notified to avoid 5-6 spam notifications
+        if (!notifiedCallIdsRef.current.has(call.id)) {
+          notifiedCallIdsRef.current.add(call.id);
+
+          const isDocumentHidden = typeof document !== 'undefined' && document.hidden;
+
+          // If the user is not actively on the tab/app, show a single desktop background notification
+          if (isDocumentHidden) {
+            pushLiveNotification({
+              title: `Входящий ${call.callType === 'video' ? 'видеозвонок' : 'аудиозвонок'}!`,
+              message: `${call.callerName} (@${call.callerHandle}) звонит вам в LiteNote...`,
+              avatarUrl: call.callerAvatar,
+              type: 'call',
+              tag: `call_${call.id}`,
+              requireInteraction: true,
+              skipSound: true, // IncomingCallModal handles ringtone sound without overlapping audio glitches
+              skipInAppToast: true, // The IncomingCallModal visual dialog is already displayed on screen
+              onClick: () => {
+                window.focus();
+              },
+            });
+          }
+        }
       } else if (ringingCalls.length === 0) {
         setIncomingCall(null);
       }
@@ -591,6 +681,55 @@ const MainAppContent: React.FC = () => {
     }
   };
 
+  const notifyChatParticipants = async (
+    convId: string,
+    payload: {
+      type?: NotificationItem['type'];
+      title: string;
+      message: string;
+      imageUrl?: string;
+    }
+  ) => {
+    if (!user || convId.startsWith('conv_ai_')) return;
+
+    try {
+      const targetConv = conversationsRef.current.find((c) => c.id === convId) ||
+        conversations.find((c) => c.id === convId);
+
+      let recipientIds: string[] = [];
+
+      if (targetConv && Array.isArray(targetConv.participants) && targetConv.participants.length > 0) {
+        recipientIds = targetConv.participants.filter((p) => p !== user.uid);
+      } else {
+        // Fallback for direct chats formatted like conv_uid1_uid2
+        const parts = convId.replace('conv_', '').split('_');
+        recipientIds = parts.filter((id) => id && id !== user.uid);
+      }
+
+      const uniqueRecipients = Array.from(new Set(recipientIds));
+
+      for (const recipientId of uniqueRecipients) {
+        await createNotificationDoc({
+          id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          userId: recipientId,
+          type: payload.type || 'message',
+          actorId: user.uid,
+          actorName: user.displayName,
+          actorAvatar: user.avatarUrl,
+          referenceId: convId,
+          title: payload.title,
+          message: payload.message,
+          imageUrl: payload.imageUrl,
+          createdAt: Date.now(),
+          isRead: false,
+          read: false,
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('Failed to notify chat participants:', e);
+    }
+  };
+
   const handleSendMessage = async (convId: string, text: string, replyTo?: Message['replyTo']) => {
     if (!user) {
       setIsAuthModalOpen(true);
@@ -621,30 +760,12 @@ const MainAppContent: React.FC = () => {
     try {
       await sendMessageDoc(convId, newMsg);
 
-      // Create notification for recipient in direct chat
-      if (!convId.startsWith('conv_ai_')) {
-        const targetConv = conversations.find((c) => c.id === convId);
-        const targetUserId =
-          targetConv?.participants?.find((id) => id !== user.uid) ||
-          convId.replace('conv_', '').replace(user.uid, '').replace('_', '');
-
-        if (targetUserId && targetUserId !== user.uid) {
-          createNotificationDoc({
-            id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            userId: targetUserId,
-            type: 'message',
-            actorId: user.uid,
-            actorName: user.displayName,
-            actorAvatar: user.avatarUrl,
-            referenceId: convId,
-            title: `Сообщение от @${user.handle}`,
-            message: text.substring(0, 80),
-            createdAt: Date.now(),
-            isRead: false,
-            read: false,
-          }).catch(() => {});
-        }
-      }
+      // Create notification for recipients in chat
+      notifyChatParticipants(convId, {
+        type: 'message',
+        title: `💬 @${user.handle}`,
+        message: text.substring(0, 100),
+      });
 
       // If this is an AI chat, trigger Gemini response
       if (convId.startsWith('conv_ai_')) {
@@ -1061,6 +1182,13 @@ const MainAppContent: React.FC = () => {
 
     try {
       await sendMessageDoc(convId, newMsg);
+
+      // Create notification for recipients in chat
+      notifyChatParticipants(convId, {
+        type: 'message',
+        title: `🎤 @${user.handle}`,
+        message: `Голосовое сообщение (${Math.round(duration)} сек.)`,
+      });
     } catch (err) {
       console.error('Error sending voice note:', err);
     }
@@ -1111,34 +1239,17 @@ const MainAppContent: React.FC = () => {
     try {
       await sendMessageDoc(convId, newMsg);
 
-      // Create notification for recipient in direct chat
-      if (!convId.startsWith('conv_ai_')) {
-        const targetConv = conversations.find((c) => c.id === convId);
-        const targetUserId =
-          targetConv?.participants?.find((id) => id !== user.uid) ||
-          convId.replace('conv_', '').replace(user.uid, '').replace('_', '');
-
-        if (targetUserId && targetUserId !== user.uid) {
-          createNotificationDoc({
-            id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            userId: targetUserId,
-            type: 'message',
-            actorId: user.uid,
-            actorName: user.displayName,
-            actorAvatar: user.avatarUrl,
-            referenceId: convId,
-            title: `Новое ${payload.mediaType === 'image' ? 'фото' : 'видео'} от @${user.handle}`,
-            message: payload.caption
-              ? payload.caption.substring(0, 80)
-              : payload.mediaType === 'image'
-              ? '📷 Фотография'
-              : '🎥 Видеозапись',
-            createdAt: Date.now(),
-            isRead: false,
-            read: false,
-          }).catch(() => {});
-        }
-      }
+      // Create rich notification for recipients in chat
+      notifyChatParticipants(convId, {
+        type: 'message',
+        title: `${payload.mediaType === 'image' ? '📷 Фото' : '🎥 Видео'} от @${user.handle}`,
+        message: payload.caption
+          ? payload.caption.substring(0, 100)
+          : payload.mediaType === 'image'
+          ? 'Фотография'
+          : 'Видеозапись',
+        imageUrl: payload.mediaType === 'image' ? payload.mediaUrl : payload.posterUrl,
+      });
     } catch (err) {
       console.error('Error sending media message:', err);
     }
@@ -1176,6 +1287,13 @@ const MainAppContent: React.FC = () => {
 
     try {
       await sendMessageDoc(convId, newMsg);
+
+      // Create notification for recipients in chat
+      notifyChatParticipants(convId, {
+        type: 'message',
+        title: `📎 Файл от @${user.handle}`,
+        message: `${fileName} (${fileSize || 'документ'})`,
+      });
     } catch (err) {
       console.error('Error sending file:', err);
     }
@@ -1210,6 +1328,26 @@ const MainAppContent: React.FC = () => {
 
     try {
       await toggleMessageReactionDoc(convId, messageId, emoji, user.uid);
+
+      // Notify the message author if different from current user
+      const currentMsgs = messages[convId] || [];
+      const targetMsg = currentMsgs.find((m) => m.id === messageId);
+      if (targetMsg && targetMsg.senderId !== user.uid) {
+        createNotificationDoc({
+          id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          userId: targetMsg.senderId,
+          type: 'reaction',
+          actorId: user.uid,
+          actorName: user.displayName,
+          actorAvatar: user.avatarUrl,
+          referenceId: convId,
+          title: `❤️ @${user.handle} отреагировал(а)`,
+          message: `${emoji} на «${(targetMsg.text || 'сообщение').substring(0, 50)}»`,
+          createdAt: Date.now(),
+          isRead: false,
+          read: false,
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error('Error adding message reaction:', err);
     }
