@@ -219,20 +219,42 @@ export const POPULAR_TECH_STACK = [
 
 /**
  * Returns a high-definition clean avatar URL for any user without falling back to ugly text-only initials.
+ * Auto-detects whether the first or second argument is an actual image URL or a username seed.
  */
-export function getCleanAvatarUrl(seed?: string, photoUrl?: string | null): string {
-  // If photoUrl is set, valid, and not broken initials/bottts:
-  if (
-    photoUrl &&
-    photoUrl.trim() !== '' &&
-    !photoUrl.includes('dicebear.com/7.x/bottts') &&
-    !photoUrl.includes('dicebear.com/7.x/initials')
-  ) {
-    return photoUrl;
+export function getCleanAvatarUrl(arg1?: string | null, arg2?: string | null): string {
+  const isImageUrl = (val?: string | null): boolean => {
+    if (!val || typeof val !== 'string') return false;
+    const trimmed = val.trim();
+    if (
+      trimmed.startsWith('http://') ||
+      trimmed.startsWith('https://') ||
+      trimmed.startsWith('data:image/') ||
+      trimmed.startsWith('blob:') ||
+      trimmed.startsWith('/')
+    ) {
+      // Exclude deprecated/broken dicebear endpoints if any
+      if (trimmed.includes('dicebear.com/7.x/bottts') || trimmed.includes('dicebear.com/7.x/initials')) {
+        return false;
+      }
+      return true;
+    }
+    return false;
+  };
+
+  // Check if arg2 is a valid image URL
+  if (isImageUrl(arg2)) {
+    return arg2!.trim();
   }
 
-  const cleanSeed = (seed || 'user').trim().toLowerCase().replace(/^@/, '') || 'operator';
-  
+  // Check if arg1 is a valid image URL
+  if (isImageUrl(arg1)) {
+    return arg1!.trim();
+  }
+
+  // Otherwise, determine the seed from whatever string is provided
+  const rawSeed = (arg1 && !isImageUrl(arg1) ? arg1 : arg2 && !isImageUrl(arg2) ? arg2 : '') || 'developer';
+  const cleanSeed = rawSeed.trim().toLowerCase().replace(/^@/, '') || 'developer';
+
   // Use high-end modern notionists developer illustration instead of text initials
   return `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(cleanSeed)}&backgroundColor=0f172a,1e293b,1e1b4b,022c22,172554`;
 }

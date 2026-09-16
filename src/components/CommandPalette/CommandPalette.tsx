@@ -191,36 +191,51 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   // Users
   const userItems: PaletteItem[] = allUsers
-    .filter((u) => !user || u.uid !== user.uid)
-    .slice(0, 8)
-    .map((u) => ({
-      id: `user_${u.uid}`,
-      title: u.displayName || u.handle,
-      subtitle: `@${u.handle} • ${u.bio || (u.status === 'online' ? 'В сети' : 'Offline')}`,
-      category: 'users',
-      avatarUrl: getCleanAvatarUrl(u.handle || u.displayName, u.avatarUrl),
-      action: () => {
-        onNavigateTab('messenger');
-        // Check if direct conversation exists
-        const existing = conversations.find(
-          (c) => c.type === 'direct' && user && c.participants.includes(user.uid) && c.participants.includes(u.uid)
-        );
-        if (existing) {
-          onSelectConversation(existing.id);
-        } else {
-          onOpenNewChat();
-        }
-      },
-    }));
+    .filter(
+      (u) =>
+        u &&
+        u.uid &&
+        u.uid !== 'undefined' &&
+        u.uid !== 'null' &&
+        u.handle !== 'undefined' &&
+        (Boolean(u.handle) || Boolean(u.displayName)) &&
+        (!user || u.uid !== user.uid)
+    )
+    .slice(0, 10)
+    .map((u) => {
+      const handle = (u.handle || 'user').replace(/^@/, '');
+      const name = u.displayName || u.handle || 'User';
+      const statusText = u.status === 'online' ? (language === 'ru' ? 'В сети' : 'Online') : (language === 'ru' ? 'Не в сети' : 'Offline');
+      return {
+        id: `user_${u.uid}`,
+        title: name,
+        subtitle: `@${handle} • ${u.bio || statusText}`,
+        category: 'users',
+        avatarUrl: getCleanAvatarUrl(handle || name, u.avatarUrl),
+        action: () => {
+          onNavigateTab('messenger');
+          // Check if direct conversation exists
+          const existing = conversations.find(
+            (c) => c.type === 'direct' && user && c.participants.includes(user.uid) && c.participants.includes(u.uid)
+          );
+          if (existing) {
+            onSelectConversation(existing.id);
+          } else {
+            onOpenNewChat();
+          }
+        },
+      };
+    });
 
   const allItems: PaletteItem[] = [...actionItems, ...navItems, ...chatItems, ...userItems];
 
-  const filteredItems = query.trim()
-    ? allItems.filter(
-        (item) =>
-          item.title.toLowerCase().includes(query.toLowerCase()) ||
-          item.subtitle?.toLowerCase().includes(query.toLowerCase())
-      )
+  const cleanQuery = query.trim().toLowerCase().replace(/^@/, '');
+  const filteredItems = cleanQuery
+    ? allItems.filter((item) => {
+        const titleMatch = item.title.toLowerCase().replace(/^@/, '').includes(cleanQuery);
+        const subMatch = item.subtitle ? item.subtitle.toLowerCase().replace(/^@/, '').includes(cleanQuery) : false;
+        return titleMatch || subMatch;
+      })
     : allItems;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

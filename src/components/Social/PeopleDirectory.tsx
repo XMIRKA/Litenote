@@ -141,7 +141,8 @@ export const PeopleDirectory: React.FC<PeopleDirectoryProps> = ({
 
     // Add all existing real registered users first, merging with fresh user state
     for (const rawUser of allUsers) {
-      if (!rawUser || !rawUser.uid) continue;
+      if (!rawUser || !rawUser.uid || rawUser.uid === 'undefined' || rawUser.uid === 'null' || rawUser.handle === 'undefined') continue;
+      if (!rawUser.handle && !rawUser.displayName) continue;
       const u = (user && rawUser.uid === user.uid) ? { ...rawUser, ...user } : rawUser;
       const normalizedHandle = (u.handle || '').toLowerCase().trim().replace(/^@/, '');
       const normalizedName = (u.displayName || '').toLowerCase().trim();
@@ -167,7 +168,7 @@ export const PeopleDirectory: React.FC<PeopleDirectoryProps> = ({
     }
 
     // Ensure current user is present
-    if (user && !seenUids.has(user.uid)) {
+    if (user && user.uid && user.uid !== 'undefined' && !seenUids.has(user.uid)) {
       list.unshift(user);
     }
 
@@ -315,7 +316,7 @@ export const PeopleDirectory: React.FC<PeopleDirectoryProps> = ({
   };
 
   // Get active list to render based on tab
-  const getDisplayUsers = () => {
+  const getDisplayUsers = (): (UserProfile & { customRole?: string })[] => {
     let sourceList: (UserProfile & { customRole?: string })[] = [];
 
     if (activeTabFilter === 'devs') {
@@ -329,14 +330,20 @@ export const PeopleDirectory: React.FC<PeopleDirectoryProps> = ({
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return sourceList.filter(
-        (u) =>
-          u.displayName?.toLowerCase().includes(q) ||
-          u.handle?.toLowerCase().includes(q) ||
-          u.bio?.toLowerCase().includes(q) ||
-          u.customRole?.toLowerCase().includes(q)
-      );
+      const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
+      return sourceList.filter((u) => {
+        if (!u || !u.uid || u.uid === 'undefined') return false;
+        const normHandle = (u.handle || '').toLowerCase().trim().replace(/^@/, '');
+        const normName = (u.displayName || '').toLowerCase().trim();
+        const normBio = (u.bio || '').toLowerCase();
+        const normRole = (u.customRole || '').toLowerCase();
+        return (
+          normHandle.includes(q) ||
+          normName.includes(q) ||
+          normBio.includes(q) ||
+          normRole.includes(q)
+        );
+      });
     }
 
     return sourceList;

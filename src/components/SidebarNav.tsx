@@ -6,6 +6,7 @@ import { ActiveTab } from '../types';
 import { CreatorBadge, VerifiedCheck } from './Common/CreatorBadge';
 import { isCreatorAccount } from '../lib/creator';
 import { getCleanAvatarUrl } from '../lib/avatar';
+import { triggerHaptic } from '../utils/haptics';
 import {
   Home,
   MessageSquare,
@@ -58,6 +59,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   ];
 
   const handleTabClick = (tabId: ActiveTab) => {
+    triggerHaptic('selection');
     if (tabId === 'profile') {
       setSelectedUserId(null); // view own profile
     }

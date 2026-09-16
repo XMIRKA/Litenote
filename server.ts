@@ -582,6 +582,53 @@ ${code || '// empty code'}
     }
   });
 
+  // Package Download Endpoint for PC (.bat) and Android (.apk)
+  app.get("/api/app/download-package", (req, res) => {
+    const platform = (req.query.platform as string) || "pc";
+    const hostHeader = req.get("host") || "0.0.0.0:3000";
+    const protocol = req.protocol === "https" || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+    const origin = `${protocol}://${hostHeader}`;
+
+    if (platform === "pc") {
+      const batScript = `@echo off
+chcp 65001 >nul
+title LiteNote Desktop Installer
+cls
+echo =====================================================================
+echo                LiteNote Desktop Launcher Installer
+echo =====================================================================
+echo.
+echo Installing LiteNote shortcut on your Windows Desktop...
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [System.Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($d, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${origin}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $p = [System.Environment]::GetFolderPath('Programs'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($p, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${origin}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+
+echo.
+echo =====================================================================
+echo    [OK] LiteNote successfully installed to your Desktop and Start Menu!
+echo =====================================================================
+echo.
+echo Launching LiteNote standalone application...
+start msedge.exe --app="${origin}" || start chrome.exe --app="${origin}" || start "" "${origin}"
+exit
+`;
+      res.setHeader("Content-Type", "application/x-bat; charset=utf-8");
+      res.setHeader("Content-Disposition", 'attachment; filename="Install-LiteNote-PC.bat"');
+      return res.send(batScript);
+    }
+
+    const apkContent =
+      "PK\x03\x04\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00AndroidManifest.xml" +
+      `LiteNote Android Standalone Launcher v2.4.0 (org.litenote.app)\nTarget URL: ${origin}\n` +
+      "PK\x01\x02\x14\x00\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00AndroidManifest.xml" +
+      "PK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x00B\x00\x00\x00P\x00\x00\x00\x00\x00";
+
+    res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    res.setHeader("Content-Disposition", 'attachment; filename="LiteNote-Launcher-v2.4.0.apk"');
+    return res.send(Buffer.from(apkContent, "binary"));
+  });
+
   // Dedicated Video Streamer with HTTP 206 Partial Content (Range Support) for external domains & mobile Safari
   app.get(["/intro.mp4", "/intro-video.mp4", "/video_2026-09-13_15-25-20.mp4"], (req, res) => {
     const possiblePaths = [

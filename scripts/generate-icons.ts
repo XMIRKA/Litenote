@@ -1,5 +1,10 @@
+import sharp from 'sharp';
+import fs from 'fs';
+import path from 'path';
 
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+// Standalone Standard App Icon SVG (512x512)
+const createStandardIconSvg = (size: number) => `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${size}" height="${size}">
   <defs>
     <!-- Background Gradients -->
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -121,3 +126,120 @@
   <!-- Top Glass Horizon Sheen (iOS Luxury Finish) -->
   <path d="M6 120C6 57.0396 57.0396 6 120 6H392C454.96 6 506 57.0396 506 120V230C410 270 290 280 6 220V120Z" fill="url(#glassSheen)"/>
 </svg>
+`;
+
+// Maskable Icon SVG (512x512 with safe area margin)
+const createMaskableIconSvg = (size: number) => `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${size}" height="${size}">
+  <defs>
+    <linearGradient id="bgGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#040810"/>
+      <stop offset="50%" stop-color="#081426"/>
+      <stop offset="100%" stop-color="#02050A"/>
+    </linearGradient>
+    <radialGradient id="centerGlowMask" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00DF89" stop-opacity="0.38"/>
+      <stop offset="50%" stop-color="#00F0FF" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="emblemGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F0FF"/>
+      <stop offset="50%" stop-color="#00DF89"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="borderGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F0FF"/>
+      <stop offset="100%" stop-color="#00DF89"/>
+    </linearGradient>
+    <filter id="neonGlowMask" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="blur1"/>
+      <feGaussianBlur stdDeviation="20" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Full bleed background for adaptive Android launcher icon masking -->
+  <rect width="512" height="512" fill="url(#bgGradMask)"/>
+  <rect width="512" height="512" fill="url(#centerGlowMask)"/>
+
+  <!-- Centered Scaled Emblem inside 80% safe zone -->
+  <g transform="translate(256, 256) scale(0.78) translate(-256, -256)">
+    <!-- Base Note Frame -->
+    <path d="M152 136C152 122.745 162.745 112 176 112H296L368 184V376C368 389.255 357.255 400 344 400H176C162.745 400 152 389.255 152 376V136Z" 
+          fill="#091824" 
+          stroke="url(#borderGradMask)" 
+          stroke-width="5"/>
+
+    <!-- Corner Fold -->
+    <path d="M296 112V168C296 176.837 303.163 184 312 184H368" 
+          fill="#06101E" 
+          stroke="url(#emblemGradMask)" 
+          stroke-width="5"/>
+
+    <!-- Glowing Monogram LN Lines -->
+    <path d="M196 172V340H268" 
+          fill="none" 
+          stroke="url(#emblemGradMask)" 
+          stroke-width="20" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"
+          filter="url(#neonGlowMask)"/>
+
+    <path d="M246 220L316 340V220" 
+          fill="none" 
+          stroke="url(#emblemGradMask)" 
+          stroke-width="20" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"
+          filter="url(#neonGlowMask)"/>
+
+    <circle cx="196" cy="172" r="8" fill="#FFFFFF" filter="url(#neonGlowMask)"/>
+    <circle cx="316" cy="220" r="8" fill="#00F0FF" filter="url(#neonGlowMask)"/>
+    <circle cx="316" cy="340" r="8" fill="#00DF89" filter="url(#neonGlowMask)"/>
+    <circle cx="268" cy="340" r="8" fill="#FFFFFF" filter="url(#neonGlowMask)"/>
+  </g>
+</svg>
+`;
+
+async function generate() {
+  const publicDir = path.join(process.cwd(), 'public');
+
+  console.log('Generating vector icons...');
+  
+  // 1. Write pristine favicon.svg
+  const standardSvg = createStandardIconSvg(512);
+  const maskableSvg = createMaskableIconSvg(512);
+  fs.writeFileSync(path.join(publicDir, 'favicon.svg'), standardSvg);
+
+  // 2. Generate 512x512 standard PWA icon
+  await sharp(Buffer.from(standardSvg))
+    .resize(512, 512)
+    .png({ quality: 100, compressionLevel: 9 })
+    .toFile(path.join(publicDir, 'pwa-512x512.png'));
+
+  // 3. Generate 192x192 standard PWA icon
+  await sharp(Buffer.from(standardSvg))
+    .resize(192, 192)
+    .png({ quality: 100, compressionLevel: 9 })
+    .toFile(path.join(publicDir, 'pwa-192x192.png'));
+
+  // 4. Generate 180x180 Apple Touch Icon
+  await sharp(Buffer.from(standardSvg))
+    .resize(180, 180)
+    .png({ quality: 100, compressionLevel: 9 })
+    .toFile(path.join(publicDir, 'apple-touch-icon.png'));
+
+  // 5. Generate 512x512 Maskable PWA icon
+  await sharp(Buffer.from(maskableSvg))
+    .resize(512, 512)
+    .png({ quality: 100, compressionLevel: 9 })
+    .toFile(path.join(publicDir, 'pwa-maskable-512x512.png'));
+
+  console.log('All PWA and mobile icons generated successfully!');
+}
+
+generate().catch(console.error);

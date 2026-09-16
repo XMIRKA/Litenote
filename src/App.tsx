@@ -30,6 +30,7 @@ import {
 import { AnimatePresence } from 'motion/react';
 
 import {
+  ActiveTab,
   Post,
   Comment,
   Conversation,
@@ -89,6 +90,11 @@ import {
 import { Terminal, Loader2 } from 'lucide-react';
 import { OfflineIndicator } from './components/Common/OfflineIndicator';
 import { CommandPalette } from './components/CommandPalette/CommandPalette';
+import { PullToRefresh } from './components/Common/PullToRefresh';
+import { MobileQuickActionFAB } from './components/Common/MobileQuickActionFAB';
+import { MobileNetworkStatus } from './components/Common/MobileNetworkStatus';
+import { useSwipeGesture } from './hooks/useSwipeGesture';
+import { triggerHaptic } from './utils/haptics';
 import {
   playMessageSentSound,
   playMessageReceivedSound,
@@ -113,6 +119,44 @@ const MainAppContent: React.FC = () => {
   } = useAuth();
 
   // Application Data States (Clean & synced via Firestore with instant 0ms localStorage cache)
+  const mainScrollRef = React.useRef<HTMLElement>(null);
+  const [showScrollToTop, setShowScrollToTop] = useState(false);
+
+  const TAB_ORDER: ActiveTab[] = ['feed', 'messenger', 'people', 'terminal_ai', 'profile', 'settings'];
+
+  // Mobile Horizontal Swipe Gesture between tabs
+  useSwipeGesture({
+    onSwipeLeft: () => {
+      if (activeTab === 'messenger' && selectedConvId) return;
+      const currentIndex = TAB_ORDER.indexOf(activeTab);
+      if (currentIndex !== -1 && currentIndex < TAB_ORDER.length - 1) {
+        triggerHaptic('light');
+        if (TAB_ORDER[currentIndex + 1] === 'profile') {
+          setSelectedUserId(null);
+        }
+        setActiveTab(TAB_ORDER[currentIndex + 1]);
+      }
+    },
+    onSwipeRight: () => {
+      if (activeTab === 'messenger' && selectedConvId) return;
+      const currentIndex = TAB_ORDER.indexOf(activeTab);
+      if (currentIndex > 0) {
+        triggerHaptic('light');
+        if (TAB_ORDER[currentIndex - 1] === 'profile') {
+          setSelectedUserId(null);
+        }
+        setActiveTab(TAB_ORDER[currentIndex - 1]);
+      }
+    },
+    disabled: activeTab === 'messenger' && !!selectedConvId,
+  });
+
+  const handleScrollToTop = () => {
+    if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   const [posts, setPosts] = useState<Post[]>(() => {
     try {
       const cached = localStorage.getItem('litenote_cache_posts');
@@ -141,7 +185,19 @@ const MainAppContent: React.FC = () => {
   const [allUsers, setAllUsers] = useState<UserProfile[]>(() => {
     try {
       const cached = localStorage.getItem('litenote_cache_all_users');
-      return cached ? JSON.parse(cached) : [];
+      if (!cached) return [];
+      const parsed = JSON.parse(cached);
+      return Array.isArray(parsed)
+        ? parsed.filter(
+            (u) =>
+              u &&
+              u.uid &&
+              u.uid !== 'undefined' &&
+              u.uid !== 'null' &&
+              u.handle !== 'undefined' &&
+              (Boolean(u.handle) || Boolean(u.displayName))
+          )
+        : [];
     } catch {
       return [];
     }
@@ -1584,12 +1640,21 @@ const MainAppContent: React.FC = () => {
 
   // Combine allUsers with fresh current user profile for instant updates across the app without reload
   const effectiveAllUsers = React.useMemo(() => {
-    if (!user) return allUsers;
-    const exists = allUsers.some((u) => u.uid === user.uid);
+    const valid = allUsers.filter(
+      (u) =>
+        u &&
+        u.uid &&
+        u.uid !== 'undefined' &&
+        u.uid !== 'null' &&
+        u.handle !== 'undefined' &&
+        (Boolean(u.handle) || Boolean(u.displayName))
+    );
+    if (!user || !user.uid || user.uid === 'undefined') return valid;
+    const exists = valid.some((u) => u.uid === user.uid);
     if (!exists) {
-      return [user, ...allUsers];
+      return [user, ...valid];
     }
-    return allUsers.map((u) => (u.uid === user.uid ? { ...u, ...user } : u));
+    return valid.map((u) => (u.uid === user.uid ? { ...u, ...user } : u));
   }, [allUsers, user]);
 
   // Derive target user for profile tab
@@ -1723,6 +1788,8 @@ const MainAppContent: React.FC = () => {
 
         {/* Dynamic Tab Views */}
         <main
+          ref={mainScrollRef as any}
+          onScroll={(e) => setShowScrollToTop(e.currentTarget.scrollTop > 320)}
           className={`flex-1 min-w-0 h-full flex flex-col overflow-hidden ${
             activeTab === 'messenger'
               ? selectedConvId
@@ -1732,20 +1799,26 @@ const MainAppContent: React.FC = () => {
           }`}
         >
           {activeTab === 'feed' && (
-            <div className="max-w-3xl mx-auto p-3 sm:p-6">
-              <FeedView
-                posts={posts}
-                comments={comments}
-                bookmarkedPostIds={bookmarkedPostIds}
-                allUsers={effectiveAllUsers}
-                onToggleReaction={handleToggleReaction}
-                onToggleBookmark={handleToggleBookmark}
-                onAddComment={handleAddComment}
-                onDeleteComment={handleDeleteComment}
-                onVotePoll={handleVotePoll}
-                onDeletePost={handleDeletePost}
-              />
-            </div>
+            <PullToRefresh
+              onRefresh={async () => {
+                await new Promise((resolve) => setTimeout(resolve, 500));
+              }}
+            >
+              <div className="max-w-3xl mx-auto p-3 sm:p-6">
+                <FeedView
+                  posts={posts}
+                  comments={comments}
+                  bookmarkedPostIds={bookmarkedPostIds}
+                  allUsers={effectiveAllUsers}
+                  onToggleReaction={handleToggleReaction}
+                  onToggleBookmark={handleToggleBookmark}
+                  onAddComment={handleAddComment}
+                  onDeleteComment={handleDeleteComment}
+                  onVotePoll={handleVotePoll}
+                  onDeletePost={handleDeletePost}
+                />
+              </div>
+            </PullToRefresh>
           )}
 
           {activeTab === 'messenger' && (
@@ -1917,6 +1990,26 @@ const MainAppContent: React.FC = () => {
         onOpenCreatePost={() => setOpenCreatePost(true)}
         onOpenDevTools={() => setIsDevToolsOpen(true)}
       />
+
+      {/* Mobile Floating Action Button (Speed Dial) */}
+      <MobileQuickActionFAB
+        onNewPost={() => setOpenCreatePost(true)}
+        onOpenAI={() => {
+          setActiveTab('terminal_ai');
+          setSelectedConvId(null);
+        }}
+        onOpenMessenger={() => {
+          setActiveTab('messenger');
+          setSelectedConvId(null);
+        }}
+        onOpenSearch={() => setIsCommandPaletteOpen(true)}
+        onScrollToTop={handleScrollToTop}
+        showScrollToTop={showScrollToTop}
+        isVisible={!(activeTab === 'messenger' && selectedConvId)}
+      />
+
+      {/* Mobile Connectivity Banner */}
+      <MobileNetworkStatus />
 
       {/* Network Connectivity Offline Toast */}
       <OfflineIndicator />

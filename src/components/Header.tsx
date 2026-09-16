@@ -66,14 +66,26 @@ export const Header: React.FC<HeaderProps> = ({
   const [searchValue, setSearchValue] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const searchContainerRef = React.useRef<HTMLDivElement>(null);
 
   const t = translations[language];
   const theme = THEME_CONFIGS[accentColor];
   const isCreator = isCreatorAccount(user);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setSearchFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchValue(e.target.value);
-    if (onSearchQuery) onSearchQuery(e.target.value);
+    const val = e.target.value;
+    setSearchValue(val);
+    if (onSearchQuery) onSearchQuery(val);
   };
 
   const handleSearchSelect = (uid: string) => {
@@ -84,14 +96,40 @@ export const Header: React.FC<HeaderProps> = ({
     setSearchValue('');
   };
 
-  const searchResults = searchValue.trim()
-    ? allUsers.filter(
-        (u) =>
-          u.displayName?.toLowerCase().includes(searchValue.toLowerCase()) ||
-          u.handle?.toLowerCase().includes(searchValue.toLowerCase()) ||
-          u.bio?.toLowerCase().includes(searchValue.toLowerCase())
-      )
-    : [];
+  const cleanSearch = searchValue.trim().toLowerCase().replace(/^@/, '');
+  const searchResults = React.useMemo(() => {
+    if (!cleanSearch) {
+      // If search is opened but nothing typed yet, show first few active users
+      return allUsers
+        .filter((u) => u && u.uid && u.uid !== 'undefined' && u.uid !== 'null' && (!user || u.uid !== user.uid))
+        .slice(0, 5);
+    }
+
+    return allUsers.filter((u) => {
+      if (!u || !u.uid || u.uid === 'undefined' || u.uid === 'null') {
+        return false;
+      }
+      const handle = (u.handle || (u as any).username || '').toLowerCase().trim().replace(/^@/, '');
+      const name = (u.displayName || (u as any).name || '').toLowerCase().trim();
+      const bio = (u.bio || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      const customRole = ((u as any).customRole || '').toLowerCase();
+      return (
+        handle.includes(cleanSearch) ||
+        name.includes(cleanSearch) ||
+        bio.includes(cleanSearch) ||
+        email.includes(cleanSearch) ||
+        customRole.includes(cleanSearch)
+      );
+    });
+  }, [allUsers, cleanSearch, user]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && searchResults.length > 0) {
+      e.preventDefault();
+      handleSearchSelect(searchResults[0].uid);
+    }
+  };
 
   const mainPillNavItems = [
     {
@@ -153,7 +191,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Global Clean Search Bar in Center (Desktop) */}
-      <div className="relative flex-1 max-w-lg hidden md:block mx-4">
+      <div ref={searchContainerRef} className="relative flex-1 max-w-lg hidden md:block mx-4">
         <div className="relative">
           <Search className="w-4 h-4 text-emerald-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -161,8 +199,8 @@ export const Header: React.FC<HeaderProps> = ({
             value={searchValue}
             onChange={handleSearchChange}
             onFocus={() => setSearchFocused(true)}
-            onBlur={() => setTimeout(() => setSearchFocused(false), 250)}
-            placeholder={language === 'ru' ? 'Поиск кодеров, постов, сниппетов...' : 'Search coders, posts, snippets...'}
+            onKeyDown={handleKeyDown}
+            placeholder={language === 'ru' ? 'Поиск людей по нику, имени или био (@ник)...' : 'Search coders by handle, name or bio (@handle)...'}
             className="w-full pl-9 pr-8 py-2 text-xs bg-[#0C1424] text-slate-100 placeholder:text-slate-500 border border-[#182A40] rounded-full focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all font-mono shadow-inner"
           />
           {searchValue && (
@@ -176,30 +214,52 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Live Search Popup */}
-        {searchFocused && searchResults.length > 0 && (
-          <div className="absolute left-0 right-0 top-full mt-2 bg-[#0E1526] border border-[#1E293B] rounded-2xl shadow-2xl overflow-hidden z-50 divide-y divide-slate-800 max-h-80 overflow-y-auto animate-in fade-in">
-            {searchResults.map((su) => (
-              <button
-                key={su.uid}
-                onMouseDown={() => handleSearchSelect(su.uid)}
-                className="w-full p-3 text-left flex items-center gap-3 hover:bg-slate-800/60 transition-colors cursor-pointer"
-              >
-                <img
-                  src={getCleanAvatarUrl(su.handle || su.displayName, su.avatarUrl)}
-                  alt={su.displayName}
-                  className="w-9 h-9 rounded-full object-cover border border-slate-700 bg-slate-800"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-xs text-white truncate">{su.displayName}</span>
-                    <VerifiedCheck user={su} />
-                    <CreatorBadge user={su} size="sm" showLabel />
-                    <span className="text-[11px] text-emerald-400 font-medium">@{su.handle}</span>
-                  </div>
-                  {su.bio && <p className="text-[11px] text-slate-400 truncate mt-0.5">{su.bio}</p>}
+        {searchFocused && (
+          <div className="absolute left-0 right-0 top-full mt-2 bg-[#0E1526] border border-[#1E293B] rounded-2xl shadow-2xl overflow-hidden z-50 divide-y divide-slate-800/80 max-h-80 overflow-y-auto animate-in fade-in">
+            {searchResults.length > 0 ? (
+              <>
+                <div className="px-3 py-1.5 bg-[#090D18] text-[10px] font-mono text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>{cleanSearch ? (language === 'ru' ? 'Результаты поиска' : 'Search Results') : (language === 'ru' ? 'Рекомендуемые кодеры' : 'Suggested Coders')}</span>
+                  <span className="text-emerald-400">{searchResults.length}</span>
                 </div>
-              </button>
-            ))}
+                {searchResults.map((su) => (
+                  <button
+                    key={su.uid}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleSearchSelect(su.uid);
+                    }}
+                    className="w-full p-3 text-left flex items-center gap-3 hover:bg-slate-800/70 transition-colors cursor-pointer group"
+                  >
+                    <div className="relative shrink-0">
+                      <img
+                        src={getCleanAvatarUrl(su.handle || su.displayName, su.avatarUrl)}
+                        alt={su.displayName}
+                        className="w-9 h-9 rounded-full object-cover border border-slate-700 bg-slate-800 group-hover:border-emerald-500/50"
+                      />
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-[#0E1526] ${
+                          su.status === 'online' ? 'bg-emerald-500' : 'bg-slate-600'
+                        }`}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-xs text-white truncate">{su.displayName}</span>
+                        <VerifiedCheck user={su} />
+                        <CreatorBadge user={su} size="sm" showLabel />
+                        <span className="text-[11px] text-emerald-400 font-mono">@{su.handle}</span>
+                      </div>
+                      {su.bio && <p className="text-[11px] text-slate-400 truncate mt-0.5">{su.bio}</p>}
+                    </div>
+                  </button>
+                ))}
+              </>
+            ) : (
+              <div className="p-4 text-center text-xs text-slate-400 font-mono">
+                {language === 'ru' ? 'Пользователь не найден' : 'No coders found'}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -227,7 +287,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Create Post Button */}
+        {/* Create Post Button (Desktop/Tablet only - mobile uses bottom bar / feed fab) */}
         {user && (
           <button
             onClick={() => setOpenCreatePost(true)}
@@ -235,7 +295,7 @@ export const Header: React.FC<HeaderProps> = ({
               backgroundColor: theme.hex,
               boxShadow: `0 0 15px rgba(${theme.rgb}, 0.35)`,
             }}
-            className="flex items-center gap-1.5 p-2 sm:px-4 sm:py-2 rounded-full text-xs font-bold hover:brightness-110 text-slate-950 active:scale-95 transition-all cursor-pointer"
+            className="hidden sm:flex items-center gap-1.5 p-2 sm:px-4 sm:py-2 rounded-full text-xs font-bold hover:brightness-110 text-slate-950 active:scale-95 transition-all cursor-pointer"
             title={language === 'ru' ? 'Создать пост' : 'New Post'}
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -243,10 +303,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Language switch */}
+        {/* Language switch (Desktop/Tablet only - mobile has language toggle in Settings & Profile) */}
         <button
           onClick={() => setLanguage(language === 'en' ? 'ru' : 'en')}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-[#0E1526] border border-[#1A243A] hover:border-slate-600 text-xs font-medium text-slate-300 hover:text-white transition-all cursor-pointer active:scale-95"
+          className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-[#0E1526] border border-[#1A243A] hover:border-slate-600 text-xs font-medium text-slate-300 hover:text-white transition-all cursor-pointer active:scale-95"
           title={language === 'ru' ? 'Сменить язык' : 'Change Language'}
         >
           <Globe className="w-3.5 h-3.5 shrink-0" style={{ color: theme.hex }} />
@@ -411,7 +471,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Mobile Search Modal Overlay */}
       {showMobileSearch && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md p-4 flex flex-col pt-16 md:hidden">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md p-4 flex flex-col pt-4 md:hidden">
           <div className="flex items-center gap-2 mb-3">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-emerald-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -420,8 +480,9 @@ export const Header: React.FC<HeaderProps> = ({
                 autoFocus
                 value={searchValue}
                 onChange={handleSearchChange}
-                placeholder={language === 'ru' ? 'Поиск кодеров...' : 'Search coders...'}
-                className="w-full pl-9 pr-8 py-2.5 text-sm bg-[#0C1424] text-white placeholder:text-slate-500 border border-emerald-500/40 rounded-xl focus:outline-none"
+                onKeyDown={handleKeyDown}
+                placeholder={language === 'ru' ? 'Поиск кодеров по нику (@ник)...' : 'Search coders by handle (@handle)...'}
+                className="w-full pl-9 pr-8 py-2.5 text-sm bg-[#0C1424] text-white placeholder:text-slate-500 border border-emerald-500/40 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
               {searchValue && (
                 <button
@@ -434,39 +495,55 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <button
               onClick={() => setShowMobileSearch(false)}
-              className="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-mono"
+              className="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white text-xs font-mono shrink-0 cursor-pointer"
             >
               {language === 'ru' ? 'Закрыть' : 'Close'}
             </button>
           </div>
 
           {/* Mobile Results */}
-          <div className="flex-1 overflow-y-auto space-y-2">
+          <div className="flex-1 overflow-y-auto space-y-2 pb-6">
+            <div className="px-1 py-1 text-[11px] font-mono text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <span>{cleanSearch ? (language === 'ru' ? 'Результаты поиска' : 'Search Results') : (language === 'ru' ? 'Рекомендуемые кодеры' : 'Suggested Coders')}</span>
+              <span className="text-emerald-400">{searchResults.length}</span>
+            </div>
+
             {searchResults.map((su) => (
               <button
                 key={su.uid}
                 onClick={() => handleSearchSelect(su.uid)}
-                className="w-full p-3 rounded-xl bg-[#0E1526] border border-slate-800 flex items-center gap-3 text-left hover:border-emerald-500 transition-colors"
+                className="w-full p-3 rounded-xl bg-[#0E1526] border border-slate-800 flex items-center gap-3 text-left hover:border-emerald-500 transition-colors active:scale-[0.99]"
               >
-                <img
-                  src={getCleanAvatarUrl(su.handle || su.displayName, su.avatarUrl)}
-                  alt={su.displayName}
-                  className="w-10 h-10 rounded-xl object-cover bg-slate-800 border border-slate-700"
-                />
+                <div className="relative shrink-0">
+                  <img
+                    src={getCleanAvatarUrl(su.handle || su.displayName, su.avatarUrl)}
+                    alt={su.displayName}
+                    className="w-11 h-11 rounded-xl object-cover bg-slate-800 border border-slate-700"
+                  />
+                  <span
+                    className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0E1526] ${
+                      su.status === 'online' ? 'bg-emerald-500' : 'bg-slate-600'
+                    }`}
+                  />
+                </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-bold text-sm text-white truncate">{su.displayName}</span>
                     <VerifiedCheck user={su} />
+                    <CreatorBadge user={su} size="sm" showLabel />
                   </div>
                   <span className="text-xs text-emerald-400 font-mono">@{su.handle}</span>
                   {su.bio && <p className="text-xs text-slate-400 truncate mt-0.5">{su.bio}</p>}
                 </div>
               </button>
             ))}
-            {searchValue.trim() && searchResults.length === 0 && (
-              <p className="text-center text-xs text-slate-500 py-8">
-                {language === 'ru' ? 'Ничего не найдено' : 'No coders found'}
-              </p>
+
+            {cleanSearch && searchResults.length === 0 && (
+              <div className="text-center text-xs text-slate-400 py-12">
+                <Users className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-50" />
+                <p className="font-semibold text-slate-300">{language === 'ru' ? 'Ничего не найдено' : 'No coders found'}</p>
+                <p className="text-[11px] text-slate-500 mt-1">{language === 'ru' ? 'Попробуйте ввести другой никнейм или имя' : 'Try searching by a different handle or name'}</p>
+              </div>
             )}
           </div>
         </div>

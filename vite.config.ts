@@ -14,9 +14,9 @@ export default defineConfig(() => {
         includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
         manifest: {
           id: '/',
-          name: 'Litenote — Next-Gen Social & Messenger',
+          name: 'LiteNote',
           short_name: 'LiteNote',
-          description: 'Next-gen real-time social network & sovereign messenger with live feed, calling & AI tools.',
+          description: 'LiteNote',
           theme_color: '#040810',
           background_color: '#040810',
           display: 'standalone',

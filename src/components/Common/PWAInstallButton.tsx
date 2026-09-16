@@ -47,19 +47,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
     setDownloading(true);
     try {
       const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://litenote.forum';
-      const endpoint = `/api/app/download-package?platform=${type}&t=${Date.now()}`;
 
-      // Channel 1: Top-level link navigation (escapes iframe sandbox download restriction)
-      const downloadLink = document.createElement('a');
-      downloadLink.href = endpoint;
-      downloadLink.target = '_blank';
-      downloadLink.rel = 'noopener noreferrer';
-      downloadLink.download = type === 'pc' ? 'Install-LiteNote-PC.bat' : 'LiteNote-Launcher-v2.4.0.apk';
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-
-      // Channel 2: Direct Blob download fallback
       if (type === 'pc') {
         const batScript = `@echo off
 chcp 65001 >nul
@@ -85,7 +73,7 @@ start msedge.exe --app="${appUrl}" || start chrome.exe --app="${appUrl}" || star
 exit
 `;
         try {
-          const blob = new Blob([batScript], { type: 'application/octet-stream' });
+          const blob = new Blob([batScript], { type: 'application/x-bat;charset=utf-8' });
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
@@ -95,7 +83,8 @@ exit
           document.body.removeChild(link);
           setTimeout(() => URL.revokeObjectURL(url), 10000);
         } catch (e) {
-          console.warn('Blob fallback non-fatal:', e);
+          console.warn('Direct download fallback:', e);
+          window.location.href = `/api/app/download-package?platform=pc&t=${Date.now()}`;
         }
       } else {
         const apkContent =
@@ -109,7 +98,7 @@ exit
           for (let i = 0; i < apkContent.length; i++) {
             bytes[i] = apkContent.charCodeAt(i) & 0xff;
           }
-          const blob = new Blob([bytes], { type: 'application/octet-stream' });
+          const blob = new Blob([bytes], { type: 'application/vnd.android.package-archive' });
           const url = URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
@@ -119,7 +108,8 @@ exit
           document.body.removeChild(link);
           setTimeout(() => URL.revokeObjectURL(url), 10000);
         } catch (e) {
-          console.warn('APK Blob fallback non-fatal:', e);
+          console.warn('APK download fallback:', e);
+          window.location.href = `/api/app/download-package?platform=apk&t=${Date.now()}`;
         }
       }
 

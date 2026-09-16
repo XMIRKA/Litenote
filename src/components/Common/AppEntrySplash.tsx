@@ -122,7 +122,7 @@ export const AppEntrySplash: React.FC<AppEntrySplashProps> = ({ onComplete }) =>
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
+      initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, filter: 'blur(16px)' }}
       transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
@@ -138,7 +138,7 @@ export const AppEntrySplash: React.FC<AppEntrySplashProps> = ({ onComplete }) =>
             controls={false}
             onEnded={handleEnded}
             onError={handleVideoError}
-            className="w-full h-full object-contain bg-black pointer-events-none"
+            className="w-full h-full object-cover sm:object-contain bg-black pointer-events-none transform max-sm:scale-105 transition-transform"
           />
         ) : (
           <VideoIntroCanvas elapsed={elapsed} />

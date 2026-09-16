@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Litenote — Next-Gen Social & Messenger",
+  "name": "LiteNote",
   "short_name": "LiteNote",
-  "description": "Next-gen real-time social network & sovereign messenger with live feed, calling & AI tools.",
+  "description": "LiteNote",
   "theme_color": "#040810",
   "background_color": "#040810",
   "display": "standalone",

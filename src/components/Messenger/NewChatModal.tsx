@@ -70,15 +70,23 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({
     onClose();
   };
 
-  const otherUsers = allUsers.filter((u) => u.uid !== user?.uid);
+  const otherUsers = allUsers.filter(
+    (u) =>
+      u &&
+      u.uid &&
+      u.uid !== 'undefined' &&
+      u.uid !== 'null' &&
+      u.handle !== 'undefined' &&
+      (Boolean(u.handle) || Boolean(u.displayName)) &&
+      u.uid !== user?.uid
+  );
   const filteredUsers = otherUsers.filter((u) => {
     if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      u.displayName.toLowerCase().includes(q) ||
-      u.handle.toLowerCase().includes(q) ||
-      u.bio?.toLowerCase().includes(q)
-    );
+    const q = searchQuery.toLowerCase().trim().replace(/^@/, '');
+    const normName = (u.displayName || '').toLowerCase().trim();
+    const normHandle = (u.handle || '').toLowerCase().trim().replace(/^@/, '');
+    const normBio = (u.bio || '').toLowerCase();
+    return normName.includes(q) || normHandle.includes(q) || normBio.includes(q);
   });
 
   const toggleMemberSelection = (uid: string) => {

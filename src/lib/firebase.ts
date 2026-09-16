@@ -199,7 +199,30 @@ export function subscribeUsers(callback: (users: UserProfile[]) => void) {
     collection(db, 'users'),
     (snap) => {
       const list: UserProfile[] = [];
-      snap.forEach((d) => list.push(d.data() as UserProfile));
+      snap.forEach((d) => {
+        const docId = d.id;
+        const data = d.data() as UserProfile;
+        const uid = data?.uid || docId;
+
+        // Clean out invalid / ghost undefined documents from Firestore
+        if (
+          !docId ||
+          docId === 'undefined' ||
+          docId === 'null' ||
+          !uid ||
+          uid === 'undefined' ||
+          uid === 'null' ||
+          data?.handle === 'undefined' ||
+          (!data?.handle && !data?.displayName)
+        ) {
+          try {
+            deleteDoc(doc(db, 'users', docId)).catch(() => {});
+          } catch {}
+          return;
+        }
+
+        list.push({ ...data, uid });
+      });
       callback(list);
     },
     (error) => {

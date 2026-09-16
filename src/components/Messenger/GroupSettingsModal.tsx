@@ -106,11 +106,23 @@ export const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
 
   // Eligible users to invite (not already in group)
   const existingUids = new Set(conversation.participants || []);
-  const nonMembers = allUsers.filter((u) => !existingUids.has(u.uid) && u.uid !== user?.uid);
+  const nonMembers = allUsers.filter(
+    (u) =>
+      u &&
+      u.uid &&
+      u.uid !== 'undefined' &&
+      u.uid !== 'null' &&
+      u.handle !== 'undefined' &&
+      (Boolean(u.handle) || Boolean(u.displayName)) &&
+      !existingUids.has(u.uid) &&
+      u.uid !== user?.uid
+  );
   const filteredNonMembers = nonMembers.filter((u) => {
     if (!memberSearch.trim()) return true;
-    const q = memberSearch.toLowerCase();
-    return u.displayName.toLowerCase().includes(q) || u.handle.toLowerCase().includes(q);
+    const q = memberSearch.toLowerCase().trim().replace(/^@/, '');
+    const name = (u.displayName || '').toLowerCase().trim();
+    const handle = (u.handle || '').toLowerCase().trim().replace(/^@/, '');
+    return name.includes(q) || handle.includes(q);
   });
 
   const handleToggleSelectNewUser = (candidate: UserProfile) => {
