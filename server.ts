@@ -251,56 +251,6 @@ async function startServer() {
     });
   });
 
-  // Direct Application Package / APK & PC installer download
-  app.get("/api/app/download-package", (req, res) => {
-    const platform = (req.query.platform as string) || "apk";
-    const appUrl = "https://ais-pre-xcpecwjouq7heproeidavo-138388183966.asia-southeast1.run.app";
-
-    if (platform === "pc") {
-      const batScript = `@echo off
-chcp 65001 >nul
-title LiteNote Desktop Installer
-cls
-echo =====================================================================
-echo                LiteNote Desktop Launcher Installer
-echo =====================================================================
-echo.
-echo Installing LiteNote shortcut on your Windows Desktop...
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [System.Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($d, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${appUrl}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $p = [System.Environment]::GetFolderPath('Programs'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($p, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${appUrl}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
-
-echo.
-echo =====================================================================
-echo    [OK] LiteNote successfully installed to your Desktop and Start Menu!
-echo =====================================================================
-echo.
-echo Launching LiteNote standalone application...
-start msedge.exe --app="${appUrl}" || start chrome.exe --app="${appUrl}" || start "" "${appUrl}"
-exit
-`;
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      res.setHeader("Content-Disposition", 'attachment; filename="Install-LiteNote-PC.bat"');
-      res.setHeader("Content-Type", "application/octet-stream");
-      return res.send(Buffer.from(batScript, "utf-8"));
-    }
-
-    // Android PWA launcher package
-    const apkHeader = Buffer.from(
-      "PK\x03\x04\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00AndroidManifest.xml" +
-      `LiteNote Android Standalone Launcher v2.4.0 (org.litenote.app)\nTarget URL: ${appUrl}\n` +
-      "PK\x01\x02\x14\x00\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00AndroidManifest.xml" +
-      "PK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x00B\x00\x00\x00P\x00\x00\x00\x00\x00",
-      "binary"
-    );
-
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.setHeader("Content-Disposition", 'attachment; filename="LiteNote-Launcher-v2.4.0.apk"');
-    res.setHeader("Content-Type", "application/octet-stream");
-    return res.send(apkHeader);
-  });
-
   // Legacy & Messenger smart generator endpoint
   app.post("/api/gemini/generate", async (req, res) => {
     try {
@@ -585,9 +535,42 @@ ${code || '// empty code'}
   // Package Download Endpoint for PC (.bat) and Android (.apk)
   app.get("/api/app/download-package", (req, res) => {
     const platform = (req.query.platform as string) || "pc";
-    const hostHeader = req.get("host") || "0.0.0.0:3000";
-    const protocol = req.protocol === "https" || req.get("x-forwarded-proto") === "https" ? "https" : "http";
-    const origin = `${protocol}://${hostHeader}`;
+
+    // Resolve robust target URL:
+    // 1. Explicit query parameter passed from frontend
+    // 2. Referer header (origin of the page making the request)
+    // 3. Forwarded host / Host header
+    // 4. Fallback to active live Development URL
+    let targetUrl = "";
+    if (typeof req.query.targetUrl === "string" && req.query.targetUrl.startsWith("http")) {
+      targetUrl = req.query.targetUrl;
+    } else if (req.headers.referer) {
+      try {
+        const parsed = new URL(req.headers.referer);
+        targetUrl = parsed.origin;
+      } catch {}
+    }
+
+    if (!targetUrl) {
+      const hostHeader = req.get("x-forwarded-host") || req.get("host") || "";
+      const protocol = req.protocol === "https" || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+      if (hostHeader && !hostHeader.includes("localhost") && !hostHeader.includes("0.0.0.0") && !hostHeader.includes("127.0.0.1")) {
+        targetUrl = `${protocol}://${hostHeader}`;
+      } else {
+        targetUrl = "https://ais-dev-xcpecwjouq7heproeidavo-138388183966.asia-southeast1.run.app";
+      }
+    }
+
+    // CRITICAL: Prevent 404.
+    // If targetUrl contains ais-pre- (which returns 404 when unshared), replace with active live ais-dev-
+    if (targetUrl.includes("ais-pre-")) {
+      targetUrl = targetUrl.replace("ais-pre-", "ais-dev-");
+    }
+
+    // Also guard against local loopbacks
+    if (targetUrl.includes("localhost") || targetUrl.includes("0.0.0.0") || targetUrl.includes("127.0.0.1")) {
+      targetUrl = "https://ais-dev-xcpecwjouq7heproeidavo-138388183966.asia-southeast1.run.app";
+    }
 
     if (platform === "pc") {
       const batScript = `@echo off
@@ -598,21 +581,26 @@ echo =====================================================================
 echo                LiteNote Desktop Launcher Installer
 echo =====================================================================
 echo.
-echo Installing LiteNote shortcut on your Windows Desktop...
+echo [1/3] Настройка ярлыка LiteNote для Windows...
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [System.Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($d, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${origin}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+set "TARGET_URL=${targetUrl}"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $p = [System.Environment]::GetFolderPath('Programs'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($p, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${origin}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [System.Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($d, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"' + $env:TARGET_URL + '\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $p = [System.Environment]::GetFolderPath('Programs'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($p, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"' + $env:TARGET_URL + '\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
 
 echo.
 echo =====================================================================
-echo    [OK] LiteNote successfully installed to your Desktop and Start Menu!
+echo    [OK] Ярлык успешно создан на Рабочем столе и в меню «Пуск»!
 echo =====================================================================
 echo.
-echo Launching LiteNote standalone application...
-start msedge.exe --app="${origin}" || start chrome.exe --app="${origin}" || start "" "${origin}"
+echo [2/3] Запуск приложения LiteNote в режиме отдельного окна...
+echo URL: %TARGET_URL%
+echo.
+start msedge.exe --app="%TARGET_URL%" || start chrome.exe --app="%TARGET_URL%" || start "" "%TARGET_URL%"
 exit
 `;
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Content-Type", "application/x-bat; charset=utf-8");
       res.setHeader("Content-Disposition", 'attachment; filename="Install-LiteNote-PC.bat"');
       return res.send(batScript);
@@ -620,10 +608,11 @@ exit
 
     const apkContent =
       "PK\x03\x04\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00AndroidManifest.xml" +
-      `LiteNote Android Standalone Launcher v2.4.0 (org.litenote.app)\nTarget URL: ${origin}\n` +
+      `LiteNote Android Standalone Launcher v2.4.0 (org.litenote.app)\nTarget URL: ${targetUrl}\n` +
       "PK\x01\x02\x14\x00\x14\x00\x08\x00\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00AndroidManifest.xml" +
       "PK\x05\x06\x00\x00\x00\x00\x01\x00\x01\x00B\x00\x00\x00P\x00\x00\x00\x00\x00";
 
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.setHeader("Content-Type", "application/vnd.android.package-archive");
     res.setHeader("Content-Disposition", 'attachment; filename="LiteNote-Launcher-v2.4.0.apk"');
     return res.send(Buffer.from(apkContent, "binary"));

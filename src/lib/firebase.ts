@@ -1748,7 +1748,15 @@ export async function deleteAIConversation(
   convId: string
 ): Promise<void> {
   if (!userId || !convId) return;
-  // 1. Delete all messages inside conversation subcollection
+  try {
+    // 1. Delete the conversation record first so onSnapshot query listeners update instantly
+    const convRef = doc(db, `users/${userId}/ai_conversations`, convId);
+    await deleteDoc(convRef);
+  } catch (err) {
+    console.warn('Error deleting conversation document:', err);
+  }
+
+  // 2. Clean up messages subcollection in the background
   try {
     const msgsSnap = await getDocs(
       collection(db, `users/${userId}/ai_conversations/${convId}/messages`)
@@ -1759,10 +1767,32 @@ export async function deleteAIConversation(
   } catch (err) {
     console.warn('Error deleting subcollection messages:', err);
   }
+}
 
-  // 2. Delete the conversation record
-  const convRef = doc(db, `users/${userId}/ai_conversations`, convId);
-  await deleteDoc(convRef);
+export async function deleteAllAIConversations(userId: string): Promise<void> {
+  if (!userId) return;
+  try {
+    const colRef = collection(db, `users/${userId}/ai_conversations`);
+    const snap = await getDocs(colRef);
+    const deletePromises = snap.docs.map(async (docSnap) => {
+      // 1. Delete conversation doc
+      try {
+        await deleteDoc(docSnap.ref);
+      } catch {}
+      // 2. Clean up subcollection messages
+      try {
+        const msgsSnap = await getDocs(
+          collection(db, `users/${userId}/ai_conversations/${docSnap.id}/messages`)
+        );
+        for (const msgDoc of msgsSnap.docs) {
+          await deleteDoc(msgDoc.ref);
+        }
+      } catch {}
+    });
+    await Promise.all(deletePromises);
+  } catch (err) {
+    console.warn('Error deleting all AI conversations in Firestore:', err);
+  }
 }
 
 export function subscribeAIMessages(

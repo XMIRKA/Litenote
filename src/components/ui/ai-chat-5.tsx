@@ -45,6 +45,7 @@ import {
   createAIConversation,
   updateAIConversation,
   deleteAIConversation,
+  deleteAllAIConversations,
   subscribeAIMessages,
   saveAIMessage,
 } from '../../lib/firebase';
@@ -164,6 +165,16 @@ const saveLocalMessages = (convId: string, msgs: ChatMessage[]) => {
   } catch {}
 };
 
+const clearLocalAllConversations = (uid: string, convs: AIConversation[]) => {
+  try {
+    localStorage.removeItem(LOCAL_CONVS_PREFIX + uid);
+    localStorage.removeItem(LOCAL_ACTIVE_CONV_PREFIX + uid);
+    convs.forEach((c) => {
+      localStorage.removeItem(LOCAL_MSGS_PREFIX + c.id);
+    });
+  } catch {}
+};
+
 export const AIChat5: React.FC<AIChat5Props> = ({
   initialMessages,
   userId,
@@ -178,6 +189,7 @@ export const AIChat5: React.FC<AIChat5Props> = ({
   const isSendingRef = useRef<boolean>(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const isUserScrolledUpRef = useRef<boolean>(false);
+  const deletedConvIdsRef = useRef<Set<string>>(new Set());
 
   // Initialize conversation threads from persistent local storage
   const [conversations, setConversations] = useState<AIConversation[]>(() => {
@@ -212,6 +224,7 @@ export const AIChat5: React.FC<AIChat5Props> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false);
   const [activeCategory, setActiveCategory] = useState<'all' | 'chat' | 'code' | 'posts' | 'actions'>('all');
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -226,18 +239,29 @@ export const AIChat5: React.FC<AIChat5Props> = ({
     isUserScrolledUpRef.current = distanceFromBottom > 80;
   };
 
-  // Subscribe to user AI conversations in Firestore (merging with local cache)
+  // Subscribe to user AI conversations in Firestore (merging with local cache and filtering deleted)
   useEffect(() => {
     if (!userId) return;
 
     const unsub = subscribeAIConversations(userId, (cloudConvs) => {
+      // 1. Filter out conversations deleted during current session
+      const validCloud = cloudConvs.filter((c) => !deletedConvIdsRef.current.has(c.id));
+
       setConversations((prev) => {
         const map = new Map<string, AIConversation>();
-        cloudConvs.forEach((c) => map.set(c.id, c));
-        // Keep any local conversations that haven't synced yet
+        validCloud.forEach((c) => map.set(c.id, c));
+
+        // Only keep unsynced local conversations that are VERY FRESH (< 30s) and not deleted
+        const now = Date.now();
         prev.forEach((c) => {
-          if (!map.has(c.id)) map.set(c.id, c);
+          if (!deletedConvIdsRef.current.has(c.id) && !map.has(c.id)) {
+            const age = now - (c.createdAt || 0);
+            if (age < 30000) {
+              map.set(c.id, c);
+            }
+          }
         });
+
         const merged = Array.from(map.values()).sort(
           (a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)
         );
@@ -246,10 +270,24 @@ export const AIChat5: React.FC<AIChat5Props> = ({
       });
 
       setActiveConvId((prev) => {
-        if (!prev && cloudConvs.length > 0) {
-          const firstId = cloudConvs[0].id;
-          localStorage.setItem(LOCAL_ACTIVE_CONV_PREFIX + effectiveUid, firstId);
-          return firstId;
+        if (!prev) {
+          if (validCloud.length > 0) {
+            const firstId = validCloud[0].id;
+            localStorage.setItem(LOCAL_ACTIVE_CONV_PREFIX + effectiveUid, firstId);
+            return firstId;
+          }
+          return null;
+        }
+
+        // If current active conversation was deleted remotely or locally
+        if (deletedConvIdsRef.current.has(prev) || (!validCloud.some((c) => c.id === prev) && validCloud.length > 0)) {
+          const nextId = validCloud[0]?.id || null;
+          if (nextId) {
+            localStorage.setItem(LOCAL_ACTIVE_CONV_PREFIX + effectiveUid, nextId);
+          } else {
+            localStorage.removeItem(LOCAL_ACTIVE_CONV_PREFIX + effectiveUid);
+          }
+          return nextId;
         }
         return prev;
       });
@@ -368,6 +406,9 @@ export const AIChat5: React.FC<AIChat5Props> = ({
   const handleDeleteConversation = async (convId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
 
+    // Register into session deleted set so snapshots don't resurrect it
+    deletedConvIdsRef.current.add(convId);
+
     // 1. Update local state immediately
     const remaining = conversations.filter((c) => c.id !== convId);
     setConversations(remaining);
@@ -396,6 +437,32 @@ export const AIChat5: React.FC<AIChat5Props> = ({
         await deleteAIConversation(userId, convId);
       } catch (err) {
         console.warn('Failed to delete cloud conversation:', err);
+      }
+    }
+  };
+
+  // Clear all conversations history
+  const handleClearAllConversations = async () => {
+    // 1. Mark all existing conversations as deleted
+    conversations.forEach((c) => deletedConvIdsRef.current.add(c.id));
+    if (activeConvId) deletedConvIdsRef.current.add(activeConvId);
+
+    // 2. Clean local storage
+    clearLocalAllConversations(effectiveUid, conversations);
+
+    // 3. Reset state
+    setConversations([]);
+    setActiveConvId(null);
+    setMessages([getWelcomeMessage(language)]);
+    setShowClearAllConfirm(false);
+    setShowClearConfirm(false);
+
+    // 4. Cloud delete all
+    if (userId) {
+      try {
+        await deleteAllAIConversations(userId);
+      } catch (err) {
+        console.warn('Failed to delete all cloud conversations:', err);
       }
     }
   };
@@ -1042,15 +1109,8 @@ export const AIChat5: React.FC<AIChat5Props> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (userId && activeConvId) {
-                    deleteAIConversation(userId, activeConvId).catch(() => {});
-                    const remaining = conversations.filter((c) => c.id !== activeConvId);
-                    if (remaining.length > 0) {
-                      setActiveConvId(remaining[0].id);
-                    } else {
-                      setActiveConvId(null);
-                      setMessages([getWelcomeMessage(language)]);
-                    }
+                  if (activeConvId) {
+                    handleDeleteConversation(activeConvId);
                   } else {
                     setMessages([getWelcomeMessage(language)]);
                   }
@@ -1087,25 +1147,65 @@ export const AIChat5: React.FC<AIChat5Props> = ({
         {isHistoryOpen && (
           <div className="absolute md:relative inset-y-0 left-0 z-30 w-full sm:w-80 md:w-72 bg-[#060D17]/98 md:bg-[#060D17] border-r border-[#14263E] flex flex-col backdrop-blur-xl animate-in slide-in-from-left-4 duration-200 shadow-2xl">
             {/* Drawer Header */}
-            <div className="p-3 border-b border-[#14263E] flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <History className="w-4 h-4 text-emerald-400" />
-                <span className="font-bold text-sm text-white">
+            <div className="p-3 border-b border-[#14263E] flex items-center justify-between gap-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <History className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-bold text-sm text-white truncate">
                   {language === 'ru' ? 'История диалогов' : 'Chat History'}
                 </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#0f1d30] text-emerald-300 font-bold">
-                  {filteredConversations.length}
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#0f1d30] text-emerald-300 font-bold shrink-0">
+                  {conversations.length}
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsHistoryOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#122238] transition-colors cursor-pointer"
-                title={language === 'ru' ? 'Закрыть' : 'Close'}
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1 shrink-0">
+                {conversations.length > 0 && !showClearAllConfirm && (
+                  <button
+                    type="button"
+                    onClick={() => setShowClearAllConfirm(true)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                    title={language === 'ru' ? 'Очистить всю историю' : 'Clear all history'}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsHistoryOpen(false);
+                    setShowClearAllConfirm(false);
+                  }}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#122238] transition-colors cursor-pointer"
+                  title={language === 'ru' ? 'Закрыть' : 'Close'}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
+
+            {/* Clear All Confirmation Banner inside drawer */}
+            {showClearAllConfirm && (
+              <div className="p-3 bg-rose-950/40 border-b border-rose-500/30 text-xs space-y-2 animate-in fade-in">
+                <p className="text-rose-200 font-medium text-[11px] text-center">
+                  {language === 'ru' ? 'Удалить всю историю диалогов ИИ навсегда?' : 'Delete all saved AI conversations permanently?'}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleClearAllConversations}
+                    className="flex-1 py-1.5 px-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-colors cursor-pointer text-center"
+                  >
+                    {language === 'ru' ? 'Да, очистить всё' : 'Yes, clear all'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowClearAllConfirm(false)}
+                    className="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-colors cursor-pointer"
+                  >
+                    {language === 'ru' ? 'Отмена' : 'Cancel'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Search Input */}
             <div className="p-2.5 border-b border-[#14263E]/60">
@@ -1198,7 +1298,7 @@ export const AIChat5: React.FC<AIChat5Props> = ({
                             </div>
 
                             {/* Actions on hover/touch */}
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
+                            <div className="opacity-70 group-hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
                               <button
                                 type="button"
                                 onClick={(e) => handleStartRename(conv, e)}
@@ -1239,6 +1339,20 @@ export const AIChat5: React.FC<AIChat5Props> = ({
                 })
               )}
             </div>
+
+            {/* Clear All History Button in Drawer Footer */}
+            {conversations.length > 0 && !showClearAllConfirm && (
+              <div className="p-2.5 border-t border-[#14263E]/60 bg-[#070E1A]/80">
+                <button
+                  type="button"
+                  onClick={() => setShowClearAllConfirm(true)}
+                  className="w-full py-1.5 px-3 rounded-xl border border-rose-500/20 hover:border-rose-500/40 bg-rose-500/5 hover:bg-rose-500/15 text-rose-400 hover:text-rose-300 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{language === 'ru' ? 'Очистить всю историю' : 'Clear all history'}</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 

@@ -35,8 +35,20 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
     }
   };
 
+  const getEffectiveAppUrl = () => {
+    let url = typeof window !== 'undefined' ? window.location.origin : 'https://ais-dev-xcpecwjouq7heproeidavo-138388183966.asia-southeast1.run.app';
+    // If the URL contains ais-pre-, it will produce 404 if the user has not shared yet; use ais-dev-
+    if (url.includes('ais-pre-')) {
+      url = url.replace('ais-pre-', 'ais-dev-');
+    }
+    if (!url || url.includes('localhost') || url.includes('127.0.0.1') || url.includes('0.0.0.0')) {
+      url = 'https://ais-dev-xcpecwjouq7heproeidavo-138388183966.asia-southeast1.run.app';
+    }
+    return url;
+  };
+
   const copyPowerShellCommand = () => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://litenote.forum';
+    const origin = getEffectiveAppUrl();
     const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [System.Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($d, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${origin}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save(); start msedge.exe --app=\\"${origin}\\""`;
     navigator.clipboard.writeText(cmd);
     setCopiedCommand(true);
@@ -46,7 +58,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   const handleConfirmDownload = (type: 'apk' | 'pc') => {
     setDownloading(true);
     try {
-      const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://litenote.forum';
+      const appUrl = getEffectiveAppUrl();
 
       if (type === 'pc') {
         const batScript = `@echo off
@@ -57,19 +69,23 @@ echo =====================================================================
 echo                LiteNote Desktop Launcher Installer
 echo =====================================================================
 echo.
-echo Installing LiteNote shortcut on your Windows Desktop...
+echo [1/3] Настройка ярлыка LiteNote для Windows...
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [System.Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($d, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${appUrl}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+set "TARGET_URL=${appUrl}"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $p = [System.Environment]::GetFolderPath('Programs'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($p, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"${appUrl}\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $d = [System.Environment]::GetFolderPath('Desktop'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($d, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"' + $env:TARGET_URL + '\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $p = [System.Environment]::GetFolderPath('Programs'); $s = $ws.CreateShortcut([System.IO.Path]::Combine($p, 'LiteNote.lnk')); $s.TargetPath = 'msedge.exe'; $s.Arguments = '--app=\\"' + $env:TARGET_URL + '\\"'; $s.Description = 'LiteNote Developer Community'; $s.Save();"
 
 echo.
 echo =====================================================================
-echo    [OK] LiteNote successfully installed to your Desktop and Start Menu!
+echo    [OK] Ярлык успешно создан на Рабочем столе и в меню «Пуск»!
 echo =====================================================================
 echo.
-echo Launching LiteNote standalone application...
-start msedge.exe --app="${appUrl}" || start chrome.exe --app="${appUrl}" || start "" "${appUrl}"
+echo [2/3] Запуск приложения LiteNote в режиме отдельного окна...
+echo URL: %TARGET_URL%
+echo.
+start msedge.exe --app="%TARGET_URL%" || start chrome.exe --app="%TARGET_URL%" || start "" "%TARGET_URL%"
 exit
 `;
         try {
@@ -84,7 +100,7 @@ exit
           setTimeout(() => URL.revokeObjectURL(url), 10000);
         } catch (e) {
           console.warn('Direct download fallback:', e);
-          window.location.href = `/api/app/download-package?platform=pc&t=${Date.now()}`;
+          window.location.href = `/api/app/download-package?platform=pc&targetUrl=${encodeURIComponent(appUrl)}&t=${Date.now()}`;
         }
       } else {
         const apkContent =
@@ -109,7 +125,7 @@ exit
           setTimeout(() => URL.revokeObjectURL(url), 10000);
         } catch (e) {
           console.warn('APK download fallback:', e);
-          window.location.href = `/api/app/download-package?platform=apk&t=${Date.now()}`;
+          window.location.href = `/api/app/download-package?platform=apk&targetUrl=${encodeURIComponent(appUrl)}&t=${Date.now()}`;
         }
       }
 
