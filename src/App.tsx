@@ -219,7 +219,47 @@ const MainAppContent: React.FC = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isDevToolsOpen, setIsDevToolsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
+  
+  // 10-minute cooldown for intro splash
+  const [showSplash, setShowSplash] = useState<boolean>(() => {
+    try {
+      // Never show intro on registration/landing view before login
+      const cachedUser = localStorage.getItem('litenote_auth_user');
+      if (!cachedUser) return false;
+      const lastIntro = localStorage.getItem('litenote_last_intro_time');
+      if (lastIntro) {
+        const timeDiff = Date.now() - Number(lastIntro);
+        if (timeDiff < 10 * 60 * 1000) {
+          return false; // Skip if seen within 10 minutes
+        }
+      }
+      return false; // Let user trigger after signin/signup
+    } catch {
+      return false;
+    }
+  });
+
+  const prevUserRef = React.useRef<UserProfile | null>(user);
+
+  // Trigger intro splash after new signin/signup if outside 10 minute cooldown
+  useEffect(() => {
+    if (!prevUserRef.current && user) {
+      try {
+        const lastIntro = localStorage.getItem('litenote_last_intro_time');
+        const timeDiff = lastIntro ? Date.now() - Number(lastIntro) : Infinity;
+        if (timeDiff >= 10 * 60 * 1000) {
+          setShowSplash(true);
+        } else {
+          setShowSplash(false);
+        }
+      } catch {
+        setShowSplash(false);
+      }
+    } else if (prevUserRef.current && !user) {
+      setShowSplash(false);
+    }
+    prevUserRef.current = user;
+  }, [user]);
 
   const prevNotifIdsRef = React.useRef<Set<string>>(new Set());
   const isInitialNotifLoadRef = React.useRef<boolean>(true);
@@ -352,6 +392,9 @@ const MainAppContent: React.FC = () => {
 
   const handleSplashComplete = () => {
     setShowSplash(false);
+    try {
+      localStorage.setItem('litenote_last_intro_time', String(Date.now()));
+    } catch {}
   };
 
   // Initialize browser notification service & service worker & click listener
@@ -1713,18 +1756,10 @@ const MainAppContent: React.FC = () => {
     return <BanScreen penalty={user.penalty} />;
   }
 
-  // If not logged in, show AuthLandingView
+  // If not logged in, show AuthLandingView immediately without intro splash delay
   if (!user) {
     return (
       <>
-        <AnimatePresence>
-          {showSplash && (
-            <AppEntrySplash
-              onComplete={handleSplashComplete}
-              userName=""
-            />
-          )}
-        </AnimatePresence>
         <AuthLandingView />
         <AuthModal
           isOpen={isAuthModalOpen}

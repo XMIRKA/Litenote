@@ -48,6 +48,7 @@ import {
   subscribeAIMessages,
   saveAIMessage,
 } from '../../lib/firebase';
+import { executeSandboxedCode } from '../../lib/codeRunner';
 import { AIConversation } from '../../types';
 
 export type ActionRisk = 'low' | 'moderate' | 'high' | 'destructive';
@@ -464,17 +465,16 @@ export const AIChat5: React.FC<AIChat5Props> = ({
       let isSuccess = true;
 
       if (action.type === 'run_sandbox_code' || action.type === 'execute_script') {
-        const res = await fetch('/api/ai/assist', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: `Выполни симуляцию запуска и дай результат выполнения этого кода:\n\n${action.payload}`,
-            type: 'code_review',
-            language,
-          }),
-        });
-        const data = await res.json();
-        outputText = data.result || '✔ Выполнение завершено успешно. Код возврата: 0';
+        const lang = action.language || 'typescript';
+        const execRes = await executeSandboxedCode(action.payload, lang);
+        isSuccess = execRes.success;
+        if (execRes.success) {
+          outputText =
+            `⏱️ [${execRes.executionTimeMs}ms] ${lang.toUpperCase()} Sandbox\n` +
+            (execRes.logs.length > 0 ? execRes.logs.join('\n') : '✔ Выполнение завершено успешно. Код возврата: 0');
+        } else {
+          outputText = `❌ Ошибка выполнения:\n${execRes.error || execRes.logs.join('\n')}`;
+        }
       } else if (action.type === 'publish_post') {
         if (onPublishToFeed) {
           onPublishToFeed(action.payload);

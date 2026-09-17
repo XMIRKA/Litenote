@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { executeSandboxedCode } from '../../lib/codeRunner';
 import {
   Code,
   Play,
@@ -111,41 +112,25 @@ export const CodePlaygroundModal: React.FC<CodePlaygroundModalProps> = ({
     }
   };
 
-  const handleRunCode = () => {
+  const handleRunCode = async () => {
     setIsRunning(true);
     setOutput('');
 
-    setTimeout(() => {
-      try {
-        if (selectedLang === 'javascript' || selectedLang === 'typescript') {
-          const logs: string[] = [];
-          const customConsole = {
-            log: (...args: any[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
-            error: (...args: any[]) => logs.push('❌ Error: ' + args.join(' ')),
-            warn: (...args: any[]) => logs.push('⚠️ Warn: ' + args.join(' ')),
-            info: (...args: any[]) => logs.push('ℹ️ ' + args.join(' ')),
-          };
-
-          // Safe execution with intercepted console
-          const runFn = new Function('console', code);
-          runFn(customConsole);
-
-          setOutput(logs.length > 0 ? logs.join('\n') : '✅ Скрипт успешно выполнен (нет вывода)');
-        } else if (selectedLang === 'python') {
-          setOutput(
-            `>>> Python 3.12 (LiteNote VM)\nSquares of evens: [4, 16, 36, 64, 100]\nConnection established: network://192.168.0.1\n\nProcess finished with exit code 0`
-          );
-        } else if (selectedLang === 'html') {
-          setOutput('✅ HTML/CSS разметка отрендерена в песочнице DOM');
-        } else {
-          setOutput(`[${selectedLang.toUpperCase()}] Синтаксическая проверка пройдена успешно. Скомпилировано за 24ms.`);
-        }
-      } catch (err: any) {
-        setOutput(`❌ Ошибка выполнения:\n${err?.message || err}`);
-      } finally {
-        setIsRunning(false);
+    try {
+      const result = await executeSandboxedCode(code, selectedLang);
+      if (result.success) {
+        setOutput(
+          `⏱️ [${result.executionTimeMs}ms] ${selectedLang.toUpperCase()}\n` +
+          (result.logs.length > 0 ? result.logs.join('\n') : '✅ Скрипт успешно выполнен (нет вывода)')
+        );
+      } else {
+        setOutput(`❌ Ошибка выполнения:\n${result.error || result.logs.join('\n')}`);
       }
-    }, 250);
+    } catch (err: any) {
+      setOutput(`❌ Ошибка выполнения:\n${err?.message || err}`);
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   const handleCopyCode = () => {
@@ -250,6 +235,24 @@ export const CodePlaygroundModal: React.FC<CodePlaygroundModalProps> = ({
             <textarea
               value={code}
               onChange={(e) => setCode(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  handleRunCode();
+                  return;
+                }
+                if (e.key === 'Tab') {
+                  e.preventDefault();
+                  const target = e.currentTarget;
+                  const start = target.selectionStart;
+                  const end = target.selectionEnd;
+                  const newCode = code.substring(0, start) + '  ' + code.substring(end);
+                  setCode(newCode);
+                  setTimeout(() => {
+                    target.selectionStart = target.selectionEnd = start + 2;
+                  }, 0);
+                }
+              }}
               className="flex-1 p-4 bg-transparent text-emerald-300 font-mono text-xs leading-relaxed resize-none focus:outline-none placeholder-slate-600 selection:bg-emerald-500/30 selection:text-white"
               spellCheck={false}
             />

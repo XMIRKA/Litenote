@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { translations } from '../../lib/i18n';
 import { THEME_CONFIGS } from '../../lib/theme';
+import { executeSandboxedCode } from '../../lib/codeRunner';
 import { Post, Comment, UserProfile } from '../../types';
 import { CommentsSection } from './CommentsSection';
 import { CreatorBadge, CoFounderBadge, VerifiedCheck } from '../Common/CreatorBadge';
@@ -150,36 +151,27 @@ export const PostCard: React.FC<PostCardProps> = ({
     }
   };
 
-  const handleRunSnippet = () => {
+  const handleRunSnippet = async () => {
     if (!post.codeSnippet?.code) return;
     setIsExecutingCode(true);
     setExecutedOutput(null);
 
-    setTimeout(() => {
-      try {
-        const lang = (post.codeSnippet?.language || 'javascript').toLowerCase();
-        if (lang === 'javascript' || lang === 'typescript' || lang === 'js' || lang === 'ts') {
-          const logs: string[] = [];
-          const customConsole = {
-            log: (...args: any[]) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')),
-            error: (...args: any[]) => logs.push('❌ Error: ' + args.join(' ')),
-            warn: (...args: any[]) => logs.push('⚠️ Warn: ' + args.join(' ')),
-            info: (...args: any[]) => logs.push('ℹ️ ' + args.join(' ')),
-          };
-          const fn = new Function('console', post.codeSnippet.code);
-          fn(customConsole);
-          setExecutedOutput(logs.length > 0 ? logs.join('\n') : '✅ Код успешно выполнен без ошибок (пустой вывод)');
-        } else if (lang === 'python' || lang === 'py') {
-          setExecutedOutput('>>> Python 3.12 (LiteNote VM Sandbox)\n' + (post.codeSnippet.output || 'Output: [Result calculated successfully in 12ms]'));
-        } else {
-          setExecutedOutput(`[${lang.toUpperCase()}] Синтаксический анализ пройден успешно. 0 ошибок.`);
-        }
-      } catch (err: any) {
-        setExecutedOutput(`❌ Ошибка выполнения:\n${err?.message || err}`);
-      } finally {
-        setIsExecutingCode(false);
+    try {
+      const lang = post.codeSnippet.language || 'javascript';
+      const result = await executeSandboxedCode(post.codeSnippet.code, lang);
+      if (result.success) {
+        setExecutedOutput(
+          `⏱️ [${result.executionTimeMs}ms] ${lang.toUpperCase()}\n` +
+          (result.logs.length > 0 ? result.logs.join('\n') : '✅ Process finished with exit code 0')
+        );
+      } else {
+        setExecutedOutput(`❌ Ошибка выполнения:\n${result.error || result.logs.join('\n')}`);
       }
-    }, 200);
+    } catch (err: any) {
+      setExecutedOutput(`❌ Ошибка выполнения:\n${err?.message || err}`);
+    } finally {
+      setIsExecutingCode(false);
+    }
   };
 
   const isOwnPost =

@@ -85,9 +85,36 @@ export const AppEntrySplash: React.FC<AppEntrySplashProps> = ({ onComplete }) =>
   const handleEnded = () => {
     if (!completedRef.current) {
       completedRef.current = true;
+      try {
+        localStorage.setItem('litenote_last_intro_time', String(Date.now()));
+      } catch {}
       onComplete();
     }
   };
+
+  const handleSkip = () => {
+    if (!completedRef.current) {
+      completedRef.current = true;
+      try {
+        localStorage.setItem('litenote_last_intro_time', String(Date.now()));
+      } catch {}
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
+      onComplete();
+    }
+  };
+
+  // Allow ESC key to skip intro
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleSkip();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const handleVideoError = () => {
     if (videoSrc === '/intro.mp4') {
@@ -110,6 +137,9 @@ export const AppEntrySplash: React.FC<AppEntrySplashProps> = ({ onComplete }) =>
 
       if (Date.now() - startTime >= TOTAL_INTRO_DURATION && !completedRef.current) {
         completedRef.current = true;
+        try {
+          localStorage.setItem('litenote_last_intro_time', String(Date.now()));
+        } catch {}
         clearInterval(timer);
         onComplete();
       }
@@ -143,6 +173,15 @@ export const AppEntrySplash: React.FC<AppEntrySplashProps> = ({ onComplete }) =>
         ) : (
           <VideoIntroCanvas elapsed={elapsed} />
         )}
+
+        {/* Sleek Skip Button */}
+        <button
+          onClick={handleSkip}
+          className="absolute top-6 right-6 z-50 px-4 py-2 rounded-full bg-slate-900/70 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 backdrop-blur-md text-xs font-mono font-medium transition-all shadow-lg flex items-center gap-2 cursor-pointer hover:border-emerald-500/50"
+        >
+          <span>Пропустить</span>
+          <span className="text-[10px] text-slate-500 font-normal border border-slate-700 px-1.5 py-0.5 rounded">ESC</span>
+        </button>
       </div>
     </motion.div>
   );
