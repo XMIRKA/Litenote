@@ -104,6 +104,104 @@ function generateSmartFallback(query: string, language: string = "ru"): string {
     );
   }
 
+  if (q.includes("lru") || q.includes("кэш") || q.includes("cache")) {
+    return (
+      "### ⚡ Реализация потокобезопасного LRU-кэша с TTL (O(1) Get / Set)\n\n" +
+      "**Архитектура решения:**\n" +
+      "1. **Двусвязный список (Doubly Linked List):** Обеспечивает перемещение недавно запрошенного узла в голову (`head`) и вытеснение старейшего узла из хвоста (`tail`) ровно за $O(1)$.\n" +
+      "2. **Хэш-таблица (`Map`):** Обеспечивает мгновенный доступ к узлу списка по ключу за $O(1)$.\n" +
+      "3. **TTL (Time-To-Live):** Отслеживание метки истечения `expiresAt = Date.now() + ttlMs` с ленивой инвалидацией.\n\n" +
+      "```typescript\n" +
+      "interface CacheNode<K, V> {\n" +
+      "  key: K;\n" +
+      "  value: V;\n" +
+      "  expiresAt: number;\n" +
+      "  prev: CacheNode<K, V> | null;\n" +
+      "  next: CacheNode<K, V> | null;\n" +
+      "}\n\n" +
+      "export class LRUCacheWithTTL<K, V> {\n" +
+      "  private readonly capacity: number;\n" +
+      "  private readonly defaultTTL: number;\n" +
+      "  private readonly map = new Map<K, CacheNode<K, V>>();\n" +
+      "  private head: CacheNode<K, V> | null = null;\n" +
+      "  private tail: CacheNode<K, V> | null = null;\n\n" +
+      "  constructor(capacity: number, defaultTTLMs: number = 60000) {\n" +
+      "    if (capacity <= 0) throw new Error('Capacity must be positive');\n" +
+      "    this.capacity = capacity;\n" +
+      "    this.defaultTTL = defaultTTLMs;\n" +
+      "  }\n\n" +
+      "  public get(key: K): V | undefined {\n" +
+      "    const node = this.map.get(key);\n" +
+      "    if (!node) return undefined;\n\n" +
+      "    // Lazy TTL expiration check\n" +
+      "    if (Date.now() > node.expiresAt) {\n" +
+      "      this.removeNode(node);\n" +
+      "      this.map.delete(key);\n" +
+      "      return undefined;\n" +
+      "    }\n\n" +
+      "    // Move accessed node to head (Most Recently Used)\n" +
+      "    this.moveToHead(node);\n" +
+      "    return node.value;\n" +
+      "  }\n\n" +
+      "  public set(key: K, value: V, ttlMs?: number): void {\n" +
+      "    const ttl = ttlMs ?? this.defaultTTL;\n" +
+      "    const expiresAt = Date.now() + ttl;\n" +
+      "    const existing = this.map.get(key);\n\n" +
+      "    if (existing) {\n" +
+      "      existing.value = value;\n" +
+      "      existing.expiresAt = expiresAt;\n" +
+      "      this.moveToHead(existing);\n" +
+      "      return;\n" +
+      "    }\n\n" +
+      "    // Evict least recently used if at capacity\n" +
+      "    if (this.map.size >= this.capacity && this.tail) {\n" +
+      "      this.map.delete(this.tail.key);\n" +
+      "      this.removeNode(this.tail);\n" +
+      "    }\n\n" +
+      "    const newNode: CacheNode<K, V> = {\n" +
+      "      key,\n" +
+      "      value,\n" +
+      "      expiresAt,\n" +
+      "      prev: null,\n" +
+      "      next: this.head,\n" +
+      "    };\n\n" +
+      "    if (this.head) {\n" +
+      "      this.head.prev = newNode;\n" +
+      "    }\n" +
+      "    this.head = newNode;\n" +
+      "    if (!this.tail) {\n" +
+      "      this.tail = newNode;\n" +
+      "    }\n" +
+      "    this.map.set(key, newNode);\n" +
+      "  }\n\n" +
+      "  private moveToHead(node: CacheNode<K, V>): void {\n" +
+      "    if (node === this.head) return;\n" +
+      "    this.removeNode(node);\n" +
+      "    node.prev = null;\n" +
+      "    node.next = this.head;\n" +
+      "    if (this.head) this.head.prev = node;\n" +
+      "    this.head = node;\n" +
+      "    if (!this.tail) this.tail = node;\n" +
+      "  }\n\n" +
+      "  private removeNode(node: CacheNode<K, V>): void {\n" +
+      "    if (node.prev) node.prev.next = node.next;\n" +
+      "    if (node.next) node.next.prev = node.prev;\n" +
+      "    if (node === this.head) this.head = node.next;\n" +
+      "    if (node === this.tail) this.tail = node.prev;\n" +
+      "    node.prev = null;\n" +
+      "    node.next = null;\n" +
+      "  }\n\n" +
+      "  public size(): number {\n" +
+      "    return this.map.size;\n" +
+      "  }\n" +
+      "}\n" +
+      "```\n\n" +
+      "**Сложность:**\n" +
+      "* **Time Complexity:** $O(1)$ для `get` и `set`.\n" +
+      "* **Space Complexity:** $O(N)$, где $N$ — емкость кэша."
+    );
+  }
+
   if (q.includes("код") || q.includes("code") || q.includes("debounce") || q.includes("hook") || q.includes("typescript") || q.includes("js")) {
     return (
       "⚡ **Пример чистого кастомного хука `useDebounce` на TypeScript:**\n\n" +
@@ -163,26 +261,50 @@ function generateSmartFallback(query: string, language: string = "ru"): string {
   );
 }
 
-// Resilient AI multi-model cascade - fast & reliable models
+// Resilient AI multi-model cascade - prioritized for stability & speed under load
+// gemini-3.1-flash-lite and gemini-2.5-flash have the highest rate limits and availability
 const WORKING_AI_MODELS = [
   "gemini-3.1-flash-lite",
-  "gemini-3.6-flash",
+  "gemini-flash-latest",
+  "gemini-3.8-flash",
+  "gemini-3.1-pro-preview",
 ];
 
-const DEFAULT_LITENOTE_AI_INSTRUCTION =
-  "You are Litenote AI — a smart, genuine, natural companion in the LiteNote network.\n\n" +
-  "CRITICAL BEHAVIOR RULES:\n" +
-  "1. BE NATURAL & CONCISE: In casual dialogue (greetings, 'как дела', 'как тебя зовут', 'кто ты', small talk), respond briefly and naturally in 1-2 sentences, exactly like a real person in a messenger. NEVER write huge essays, unprompted summaries, or bulleted lists of your capabilities.\n" +
-  "2. NO SALES PITCHES OR FEATURE DUMPING: Never list what you can do (e.g., '1. Код 2. Творчество 3. Продуктивность') unless the user explicitly asks 'что ты умеешь?'. Answer only what was asked.\n" +
-  "3. IDENTITY: You are Litenote AI. Never mention Google, Gemini, OpenAI, or other brands. You are part of the LiteNote community.\n" +
-  "4. IN-DEPTH ONLY WHEN REQUESTED: If the user specifically asks for code, debugging, architecture, or an in-depth explanation, provide high-quality, detailed technical answers. Otherwise, keep it conversational, warm, and concise.\n" +
-  "5. LANGUAGE & TONE: Match the user's language (primarily Russian or English). Speak naturally, with genuine friendliness and zero corporate fluff.";
+const ELITE_LITENOTE_AI_INSTRUCTION = `You are Litenote AI — an elite Principal Software Architect, Staff Systems Engineer, and master technologist embedded in the LiteNote developer ecosystem.
+
+MISSION & IDENTITY:
+- You are Litenote AI. You never identify as Google, Gemini, OpenAI, Claude, or any external service. You are the definitive intelligence engine of LiteNote.
+- You are built to excel in massive battle-tests across all computer science, software engineering, and systems domains: algorithms, distributed systems, web architectures, low-level performance, cryptography, cloud infrastructure, full-stack development, database internals, DevOps, and cybersecurity.
+
+CORE TECHNICAL DIRECTIVES:
+1. NO ARTIFICIAL BREVITY RESTRICTIONS:
+   - Provide exhaustive, production-grade, end-to-end solutions.
+   - Never truncate code, never replace implementation with placeholders like "// TODO: implement", "// ...rest of code...", or "// write your logic here".
+   - Always output full, compilable, runnable code with rigorous edge-case handling, error handling, strict typing, and concurrency safety.
+   
+2. EXTREME CODING EXCELLENCE:
+   - Modern Standards: TypeScript 5.8+ (strict mode, generic constraints, discriminated unions), Python 3.12+, Go 1.23+, Rust, C++20/23, modern React 19 architecture, SQL (PostgreSQL/Cloud Spanner), Docker/K8s manifests.
+   - Algorithmic Rigor: Analyze time complexity (Big-O time) and space complexity (Big-O auxiliary space). Choose optimal data structures (e.g. B-Trees, Segment Trees, Hash Maps, Tries, Ring Buffers, Lock-Free Queues).
+   - Defensive Engineering: Input validation, memory leak prevention, sanitization against injection (SQLi, XSS, CSRF, SSRF, prototype pollution), connection pool management, and timeout/backoff resilience.
+
+3. ARCHITECTURAL MASTERY:
+   - Deconstruct complex requests systematically:
+     * Architecture & Data Flow Overview
+     * Concrete Production Implementation (Clean, idiomatic, fully typed)
+     * Edge Cases, Concurrency, and Error Handling
+     * Complexity Analysis ($O(N)$ / $O(1)$) and Performance Benchmarks
+     * Battle-Testing & Verification Strategies (Unit/Integration testing examples)
+
+4. NATURAL & PROFESSIONAL COMMUNICATION:
+   - Communicate in the user's language (primarily Russian or English).
+   - For simple greetings, respond warmly and with readiness for deep technical challenges.
+   - For any question regarding code, algorithms, bugs, design patterns, or technical dilemmas, demonstrate unmatched technical depth, clarity, and authority.`;
 
 async function callRealAi(
   contents: any,
   systemInstruction?: string,
-  temperature: number = 0.75,
-  maxOutputTokens: number = 2048
+  temperature: number = 0.4,
+  maxOutputTokens: number = 8192
 ): Promise<{ text: string; modelUsed: string }> {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
@@ -198,15 +320,16 @@ async function callRealAi(
         model,
         contents,
         config: {
-          systemInstruction: systemInstruction || DEFAULT_LITENOTE_AI_INSTRUCTION,
+          systemInstruction: systemInstruction || ELITE_LITENOTE_AI_INSTRUCTION,
           temperature,
           maxOutputTokens,
         },
       });
 
-      // 9000ms timeout per model
+      // Adaptive timeout: 15s for flash-lite, 25s for larger models
+      const timeoutMs = model.includes("lite") ? 15000 : 25000;
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout requesting model ${model}`)), 9000)
+        setTimeout(() => reject(new Error(`Timeout requesting model ${model}`)), timeoutMs)
       );
 
       const response: any = await Promise.race([generatePromise, timeoutPromise]);
@@ -215,8 +338,10 @@ async function callRealAi(
         return { text: response.text.trim(), modelUsed: model };
       }
     } catch (err: any) {
-      console.warn(`[Litenote AI] Model ${model} unavailable:`, err?.status || err?.message);
+      const status = err?.status || (err?.message?.includes("429") ? 429 : err?.message?.includes("503") ? 503 : null);
+      console.warn(`[Litenote AI] Model ${model} unavailable (status: ${status || 'err'}, msg: ${err?.message?.slice(0, 80)}). Switching to next cascade model...`);
       lastError = err;
+      // Immediately proceed to next available model in the cascade without blocking
     }
   }
 
@@ -270,9 +395,9 @@ async function startServer() {
 
       const aiRes = await callRealAi(
         [{ role: "user", parts: [{ text: prompt }] }],
-        systemInstruction,
-        0.75,
-        1500
+        systemInstruction || ELITE_LITENOTE_AI_INSTRUCTION,
+        0.3,
+        8192
       );
 
       res.json({
@@ -310,9 +435,9 @@ async function startServer() {
       try {
         const aiRes = await callRealAi(
           sanitizedContents,
-          systemInstruction || DEFAULT_LITENOTE_AI_INSTRUCTION,
-          0.8,
-          2048
+          systemInstruction || ELITE_LITENOTE_AI_INSTRUCTION,
+          0.3,
+          8192
         );
 
         return res.json({
@@ -510,19 +635,15 @@ ${code || '// empty code'}
         return res.json({ result: fallbackMsg });
       }
 
-      const ai = getGeminiAI();
-      const response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-lite",
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: {
-          systemInstruction: "You are Litenote AI, an elite code architect. Never identify as Gemini.",
-          temperature: 0.3,
-          maxOutputTokens: 1800,
-        },
-      });
+      const aiRes = await callRealAi(
+        [{ role: "user", parts: [{ text: prompt }] }],
+        "You are Litenote AI — an elite Staff Systems Engineer and Code Architect. Provide deep, comprehensive, production-ready code analysis with exhaustive implementations, zero placeholders, and strict performance audits.",
+        0.2,
+        8192
+      );
 
       res.json({
-        result: response.text || "Анализ успешно завершен.",
+        result: aiRes.text || "Анализ успешно завершен.",
       });
     } catch (err: any) {
       console.warn("AI Code Assist Error:", err?.message);

@@ -105,10 +105,11 @@ export const MessengerView: React.FC<MessengerViewProps> = ({
   const displayConversations =
     conversations.length > 0 ? conversations : [defaultAiConv];
 
-  // Pick active conversation
-  const activeConversation =
-    displayConversations.find((c) => c.id === selectedConvId) ||
-    displayConversations[0];
+  // Pick active conversation: on desktop (md+) fallback to first conversation if none selected,
+  // but if selectedConvId is explicitly null/empty, keep activeConversation null on mobile to show list cleanly
+  const activeConversation = selectedConvId
+    ? displayConversations.find((c) => c.id === selectedConvId) || null
+    : null;
 
   const activeMessages = activeConversation
     ? messages[activeConversation.id] || []

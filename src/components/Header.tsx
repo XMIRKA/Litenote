@@ -67,19 +67,28 @@ export const Header: React.FC<HeaderProps> = ({
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const searchContainerRef = React.useRef<HTMLDivElement>(null);
+  const userDropdownRef = React.useRef<HTMLDivElement>(null);
 
   const t = translations[language];
   const theme = THEME_CONFIGS[accentColor];
   const isCreator = isCreatorAccount(user);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (searchContainerRef.current && !searchContainerRef.current.contains(target)) {
         setSearchFocused(false);
+      }
+      if (userDropdownRef.current && !userDropdownRef.current.contains(target)) {
+        setShowUserDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -356,7 +365,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* User Avatar & Dropdown */}
         {user ? (
-          <div className="relative">
+          <div ref={userDropdownRef} className="relative">
             <button
               onClick={() => setShowUserDropdown(!showUserDropdown)}
               className="flex items-center gap-1.5 p-1 rounded-full bg-[#0E1526] border border-[#1A243A] hover:border-emerald-500/40 hover:bg-[#121B30] transition-all cursor-pointer active:scale-95"
@@ -374,11 +383,11 @@ export const Header: React.FC<HeaderProps> = ({
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block mr-1" />
             </button>
 
-            {/* Dropdown Menu with full-screen backdrop for mobile */}
+            {/* Dropdown Menu with full-screen backdrop for mobile and desktop */}
             {showUserDropdown && (
               <>
                 <div
-                  className="fixed inset-0 z-40 bg-black/50 md:bg-transparent backdrop-blur-[2px] md:backdrop-blur-none"
+                  className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]"
                   onClick={() => setShowUserDropdown(false)}
                 />
                 <div className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-20px)] bg-[#0E1526] border border-[#1E293B] rounded-2xl shadow-2xl p-2 z-50 space-y-1 animate-in fade-in">

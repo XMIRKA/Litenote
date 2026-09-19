@@ -95,20 +95,20 @@ const getWelcomeMessage = (lang: 'ru' | 'en'): ChatMessage => ({
   sender: 'assistant',
   content:
     lang === 'ru'
-      ? `Привет! Я **Litenote AI** — твой персональный всесторонний собеседник и умный ассистент.\n\n` +
-        `Я с удовольствием пообщаюсь с тобой на любые темы и помогу в самых разных задачах:\n` +
-        `• 💬 **Живой разговор обо всём** — повседневные темы, психология, идеи, книги, наука, творчество и юмор\n` +
-        `• ⚡ **Разработка и код** — написание, отладка, ревью и оптимизация (TypeScript, Python, React, Rust, SQL)\n` +
-        `• 💡 **Создание контента** — яркие публикации, опросы и идеи для ленты Litenote\n` +
-        `• 🛡️ **Безопасные действия** — интерактивное подтверждение операций (Inline Action Approval Gate)\n\n` +
-        `О чём хочешь поговорить или что мы сегодня сделаем?`
-      : `Hello! I am **Litenote AI** — your versatile all-around conversational companion and intelligent copilot.\n\n` +
-        `I can help you with anything:\n` +
-        `• 💬 **Engaging everyday conversation** — philosophy, life, science, creativity, ideas, and humor\n` +
-        `• ⚡ **Code & Engineering** — write, debug, and review code (TypeScript, Python, React, Rust, SQL)\n` +
-        `• 💡 **Drafting content** — captivating posts and interactive polls for the Litenote community feed\n` +
-        `• 🛡️ **Gated sandbox actions** — secure operations with inline approval requests\n\n` +
-        `What would you like to explore or discuss today?`,
+      ? `Привет! Я **Litenote AI** — твой главный архитектор систем, экспертный инженер и собеседник на платформе LiteNote.\n\n` +
+        `Все искусственные ограничения на длину ответов сняты. Я готов к глубокому баттл-тесту по любым направлениям:\n` +
+        `• 💻 **Продвинутый кодинг & Big-O** — написание исчерпывающих алгоритмов без пропусков (TypeScript, Python, Go, Rust, C++, SQL), глубокий анализ сложности $O(N)$ / $O(1)$\n` +
+        `• 🏛️ **High-Load Архитектура** — микросервисы, распределённые хранилища, репликация, Event-Driven дизайн, паттерны устойчивости (Circuit Breaker, Saga, Raft)\n` +
+        `• 🛡️ **Безопасность & Отладка** — поиск уязвимостей, предотвращение утечек памяти, устранение Race Conditions и защита от инъекций\n` +
+        `• 💬 **Инженерный диалог & контент** — аргументированные дискуссии, код-ревью и посты для сообщества LiteNote\n\n` +
+        `Задай любую сложную техническую задачу или предоставь алгоритмический тест любой глубины — разберём до последнего байта.`
+      : `Hello! I am **Litenote AI** — your Principal Systems Architect, elite engineering copilot, and thought partner on LiteNote.\n\n` +
+        `All artificial brevity constraints have been removed. I am primed for rigorous battle-tests across all technical domains:\n` +
+        `• 💻 **Production Engineering & Big-O** — complete, untruncated implementations (TypeScript, Python, Go, Rust, C++, SQL) with formal time & space complexity analysis\n` +
+        `• 🏛️ **High-Load & Distributed Systems** — consensus protocols, fault-tolerant pipelines, replication models, and reactive stream architectures\n` +
+        `• 🛡️ **Security & Deep Debugging** — zero-placeholder bug fixes, race condition elimination, and memory leak analysis\n` +
+        `• 💬 **Technical Dialogue & Community** — sharp architectural reviews and high-signal posts for the LiteNote network\n\n` +
+        `Present any algorithmic challenge, system design problem, or code to audit — let's break it down to first principles.`,
   timestamp: Date.now(),
 });
 
@@ -765,11 +765,11 @@ export const AIChat5: React.FC<AIChat5Props> = ({
 
       let responseText = '';
 
-      // Primary attempt + automatic fast retry with generous timeout (25s)
+      // Primary attempt + automatic fast retry with generous timeout (60s) for complex code tasks
       for (let attempt = 1; attempt <= 2 && !responseText; attempt++) {
         try {
           const controller = new AbortController();
-          const clientTimeout = setTimeout(() => controller.abort(), 25000);
+          const clientTimeout = setTimeout(() => controller.abort(), 60000);
 
           const res = await fetch('/api/ai/chat', {
             method: 'POST',
@@ -806,7 +806,7 @@ export const AIChat5: React.FC<AIChat5Props> = ({
       if (!responseText) {
         try {
           const controller = new AbortController();
-          const clientTimeout = setTimeout(() => controller.abort(), 15000);
+          const clientTimeout = setTimeout(() => controller.abort(), 40000);
           const res2 = await fetch('/api/gemini/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -944,31 +944,31 @@ export const AIChat5: React.FC<AIChat5Props> = ({
 
   const quickPrompts = [
     {
-      category: 'chat',
-      icon: MessageCircle,
-      label: language === 'ru' ? '💬 Поговорить на свободную тему' : '💬 General Conversation',
-      prompt:
-        language === 'ru'
-          ? 'Расскажи что-нибудь интересное о будущем искусственного интеллекта и как он меняет разработку и творчество?'
-          : 'Tell me something fascinating about the future of AI and how it is shaping developer creativity?',
-    },
-    {
       category: 'code',
       icon: Code2,
-      label: language === 'ru' ? '⚡ Написать & Протестировать код' : '⚡ Write & Test Code',
+      label: language === 'ru' ? '⚔️ Алгоритмический баттл-тест' : '⚔️ Algorithmic Battle-Test',
       prompt:
         language === 'ru'
-          ? 'Напиши функцию на TypeScript для глубокого сравнения объектов (deep equal) с тестами и запусти ее в песочнице.'
-          : 'Write a TypeScript deep-equal function with edge case tests and simulate running it in sandbox.',
+          ? 'Реализуй потокобезопасный LRU-кэш на TypeScript/Python с поддержкой TTL (Time-To-Live), O(1) чтением и записью через двусвязный список и хэш-таблицу. Приведи исчерпывающий код без пропусков с тестами граничных случаев.'
+          : 'Implement a thread-safe LRU Cache with TTL in TypeScript/Python with O(1) get/set via Doubly-Linked List + Hash Map. Provide untruncated production code and edge-case test suites.',
+    },
+    {
+      category: 'chat',
+      icon: MessageCircle,
+      label: language === 'ru' ? '🏛️ High-Load Архитектура' : '🏛️ High-Load Architecture',
+      prompt:
+        language === 'ru'
+          ? 'Спроектируй распределённую систему real-time аналитики кликов и просмотров на 100,000 RPS. Опиши выбор Kafka/Pulsar, ClickHouse, буферизацию в памяти, гарантии доставки (At-least-once vs Exactly-once) и стратегию партиционирования.'
+          : 'Design a distributed real-time clickstream ingestion engine handling 100,000 RPS. Detail Kafka/Pulsar streaming, ClickHouse storage, in-memory buffering, delivery semantics, and partitioning strategies.',
     },
     {
       category: 'posts',
       icon: Lightbulb,
-      label: language === 'ru' ? '💡 Создать вирусный пост' : '💡 Craft a Social Post',
+      label: language === 'ru' ? '💡 Экспертный пост для инженеров' : '💡 Expert Engineering Post',
       prompt:
         language === 'ru'
-          ? 'Напиши яркий пост для ленты Litenote о 5 главных ошибках при работе с React useEffect, с примерами и тегами.'
-          : 'Write an engaging post for the Litenote feed covering top 5 mistakes with React useEffect, with code examples and hashtags.',
+          ? 'Напиши экспертный пост для сообщества LiteNote о скрытых ловушках многопоточности, Event Loop в Node.js и предотвращении утечек памяти в V8, со сниппетами кода и тегами.'
+          : 'Write an authoritative technical post for LiteNote covering V8 Event Loop nuances, microtasks vs macrotasks, and memory leak prevention with practical code snippets.',
     },
     {
       category: 'actions',

@@ -5,6 +5,7 @@ import { Message, UserProfile } from '../../types';
 import { CreatorBadge, VerifiedCheck } from '../Common/CreatorBadge';
 import { isCreatorAccount } from '../../lib/creator';
 import { getCleanAvatarUrl } from '../../lib/avatar';
+import { triggerHaptic } from '../../utils/haptics';
 import {
   Play,
   Pause,
@@ -74,6 +75,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Touch Swipe-to-Reply (Telegram-style gesture)
+  const [swipeOffset, setSwipeOffset] = useState<number>(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
+  const hasTriggeredSwipeHaptic = useRef<boolean>(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const waveformRef = useRef<HTMLDivElement | null>(null);
@@ -247,6 +255,58 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const isMediaMessage = message.type === 'image' || message.type === 'video' || message.type === 'video_note';
 
+  // Swipe-to-Reply touch handlers (Telegram-style swipe left to reply)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!onReply || e.touches.length !== 1) return;
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    hasTriggeredSwipeHaptic.current = false;
+    setIsSwiping(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!onReply || !touchStartX.current || !touchStartY.current) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const deltaX = currentX - touchStartX.current;
+    const deltaY = currentY - touchStartY.current;
+
+    // If gesture is mainly vertical, don't swipe horizontally
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(swipeOffset) < 10) {
+      return;
+    }
+
+    // Only allow swiping to the left (negative deltaX)
+    if (deltaX < 0) {
+      // Resistance factor as user pulls further
+      const clampedOffset = Math.max(deltaX * 0.75, -80);
+      setSwipeOffset(clampedOffset);
+
+      if (clampedOffset <= -45 && !hasTriggeredSwipeHaptic.current) {
+        triggerHaptic('medium');
+        hasTriggeredSwipeHaptic.current = true;
+      } else if (clampedOffset > -45 && hasTriggeredSwipeHaptic.current) {
+        hasTriggeredSwipeHaptic.current = false;
+      }
+    } else {
+      setSwipeOffset(0);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!onReply) return;
+    setIsSwiping(false);
+    if (swipeOffset <= -45) {
+      triggerHaptic('success');
+      onReply(message);
+    }
+    // Snap back smoothly
+    setSwipeOffset(0);
+    touchStartX.current = 0;
+    touchStartY.current = 0;
+    hasTriggeredSwipeHaptic.current = false;
+  };
+
   return (
     <div
       id={`msg-${message.id}`}
@@ -272,13 +332,43 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
       )}
 
-      {/* Main Bubble Row */}
-      <div className="relative flex items-center max-w-[90%] sm:max-w-md md:max-w-lg">
-        {/* Floating Actions Toolbar (Hover) */}
+      {/* Main Bubble Row with Telegram-style Swipe-to-Reply */}
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+        style={{
+          transform: `translateX(${swipeOffset}px)`,
+          transition: isSwiping ? 'none' : 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+        }}
+        className="relative flex items-center max-w-[90%] sm:max-w-md md:max-w-lg will-change-transform"
+      >
+        {/* Telegram-style Swipe-to-Reply Indicator (revealed on the right when swiping left) */}
+        {onReply && (
+          <div
+            className="absolute -right-12 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none transition-all"
+            style={{
+              opacity: Math.min(Math.abs(swipeOffset) / 45, 1),
+              transform: `translateY(-50%) scale(${Math.min(Math.max(Math.abs(swipeOffset) / 45, 0.4), 1.15)})`,
+            }}
+          >
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-colors ${
+                swipeOffset <= -45
+                  ? 'bg-indigo-500 text-white shadow-indigo-500/40 ring-2 ring-indigo-400/50'
+                  : 'bg-[#151E32] text-slate-400 border border-white/10'
+              }`}
+            >
+              <Reply className="w-4 h-4 -scale-x-100" />
+            </div>
+          </div>
+        )}
+        {/* Floating Actions Toolbar (Hover on Desktop sm+) */}
         <div
-          className={`opacity-0 group-hover:opacity-100 ${
+          className={`hidden sm:flex opacity-0 group-hover:opacity-100 ${
             showReactionPicker || showDeleteMenu ? 'opacity-100' : ''
-          } flex items-center gap-0.5 bg-[#090D18]/95 border border-white/10 rounded-lg p-0.5 shadow-xl backdrop-blur-md transition-opacity duration-150 absolute ${
+          } items-center gap-0.5 bg-[#090D18]/95 border border-white/10 rounded-lg p-0.5 shadow-xl backdrop-blur-md transition-opacity duration-150 absolute ${
             isOwn ? '-left-24 sm:-left-28' : '-right-24 sm:-right-28'
           } top-1/2 -translate-y-1/2 z-30`}
           onClick={(e) => e.stopPropagation()}

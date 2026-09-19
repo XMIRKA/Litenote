@@ -559,10 +559,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </button>
 
             {showChatMenu && (
-              <div
-                className="absolute right-0 top-10 bg-[#0E1424] border border-[#1E293B] rounded-xl p-1 shadow-2xl z-40 flex flex-col gap-0.5 min-w-[200px]"
-                onMouseLeave={() => setShowChatMenu(false)}
-              >
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setShowChatMenu(false)}
+                />
+                <div
+                  className="absolute right-0 top-10 bg-[#0E1424] border border-[#1E293B] rounded-xl p-1 shadow-2xl z-40 flex flex-col gap-0.5 min-w-[200px]"
+                >
                 {/* Group Management */}
                 {(conversation.type === 'group' || conversation.type === 'channel') && (
                   <>
@@ -639,8 +643,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   </button>
                 )}
               </div>
-            )}
-          </div>
+            </>
+          )}
+        </div>
 
           {/* Security Badge */}
           <div className="hidden lg:flex items-center gap-1 text-[11px] text-slate-400 bg-white/5 px-2.5 py-0.5 rounded border border-white/5">
@@ -752,7 +757,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-3 relative overscroll-contain"
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 sm:p-5 space-y-3 relative overscroll-contain"
       >
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500 text-xs space-y-3">
